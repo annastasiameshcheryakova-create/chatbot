@@ -1,3 +1,4 @@
+import { SEED_DOCS } from "../src/seed_kb.js";
 import { Settings } from "../src/settings.js";
 import { KB } from "../src/kb.js";
 import { RAG } from "../src/rag.js";
@@ -413,4 +414,28 @@ function init(){
   autoResize();
   setStatus("Готово");
 }
+function ensureSeedKB(){
+  const existing = KB.getAll();
+  if (existing.length) return;
+
+  // перший запуск — “навчаємо” базою за замовчуванням
+  for (const d of SEED_DOCS) {
+    KB.addDoc({ title: d.title, text: d.text });
+  }
+}
+
+function init(){
+  updateApiState();
+
+  ensureSeedKB();          // 👈 ОЦЕ “НАВЧАННЯ”
+  renderKB();
+
+  RAG.rebuildIndexFromKB();
+  autoResize();
+
+  const s = RAG.statsInfo?.();
+  if (s) setStatus(`Готово • chunks: ${s.chunks} • vocab: ${s.vocab}`);
+  else setStatus("Готово");
+}
 init();
+;
