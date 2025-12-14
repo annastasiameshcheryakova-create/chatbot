@@ -1,0 +1,309 @@
+/************************************************************
+ * BioConsult — UI Styles
+ * Роль: оформлення інтерфейсу RAG-чату
+ * Підхід: чистий CSS, без фреймворків
+ ************************************************************/
+
+/* =========================================================
+   1. CSS Variables (Design System)
+   ========================================================= */
+
+:root {
+  /* Кольорова палітра */
+  --bg: #f6fbf8;                 /* Загальний фон */
+  --panel: #ffffffcc;            /* Напівпрозорі панелі */
+  --text: #24332d;               /* Основний текст */
+  --muted: #7a8f86;              /* Вторинний текст */
+  --line: #e4efe9;               /* Лінії / рамки */
+
+  /* Акцентні кольори */
+  --accent: #9fc9b4;
+  --accent-soft: #edf6f2;
+  --accent-strong: #86b8a1;
+
+  /* Радіуси та тіні */
+  --r: 18px;
+  --rLg: 26px;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* =========================================================
+   2. Reset + Base
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Arial;
+
+  color: var(--text);
+
+  /* Пастельний фон з градієнтами */
+  background:
+    radial-gradient(900px 500px at 80% 0%, #eaf4ef, transparent 60%),
+    radial-gradient(700px 450px at 10% 10%, #f2f8f5, transparent 55%),
+    var(--bg);
+}
+
+/* =========================================================
+   3. Layout (Grid)
+   ========================================================= */
+
+.app {
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+}
+
+/* =========================================================
+   4. Sidebar
+   ========================================================= */
+
+.sidebar {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid var(--line);
+  padding: 14px 12px;
+
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+}
+
+/* Верх сайдбару */
+.sb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 10px;
+}
+
+/* Логотип */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 780;
+  letter-spacing: -0.2px;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #cfe6dc, #b6d8c9);
+  box-shadow: 0 6px 14px rgba(134, 184, 161, 0.35);
+}
+
+/* Кнопки-іконки */
+.iconbtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+
+  display: grid;
+  place-items: center;
+  color: #203127;
+}
+
+.iconbtn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* =========================================================
+   5. Sidebar content (KB)
+   ========================================================= */
+
+.newchat {
+  margin: 6px;
+  padding: 10px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
+
+/* Індикатор */
+.badge {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 6px rgba(159, 201, 180, 0.25);
+}
+
+/* Заголовки секцій */
+.sb-section {
+  margin: 10px 6px 6px;
+  padding: 6px 4px;
+
+  font-size: 13px;
+  color: var(--muted);
+
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Список файлів */
+.sb-list {
+  padding: 6px;
+  overflow: auto;
+  flex: 1;
+}
+
+.sb-item {
+  padding: 10px;
+  border-radius: 14px;
+  font-size: 14px;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sb-item:hover {
+  background: var(--accent-soft);
+}
+
+/* =========================================================
+   6. Main Area
+   ========================================================= */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Верхня панель */
+.topbar {
+  height: 64px;
+  padding: 12px 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* =========================================================
+   7. Chat
+   ========================================================= */
+
+.chatlog {
+  width: min(900px, 100%);
+  margin-top: 14px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  max-height: 48vh;
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+
+/* Повідомлення */
+.msg {
+  max-width: 78ch;
+  padding: 12px 14px;
+  border-radius: 16px;
+
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+
+  line-height: 1.35;
+  font-size: 15px;
+  white-space: pre-wrap;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: #eef7f3;
+  border-color: #d6ebe2;
+}
+
+.msg.bot {
+  align-self: flex-start;
+}
+
+/* =========================================================
+   8. Composer (Input)
+   ========================================================= */
+
+.composer-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  padding: 18px;
+  display: flex;
+  justify-content: center;
+
+  background: linear-gradient(
+    to top,
+    rgba(246, 251, 248, 1),
+    rgba(246, 251, 248, 0.7),
+    rgba(246, 251, 248, 0)
+  );
+}
+
+/* Поле вводу */
+.input textarea {
+  width: 100%;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Кнопка відправки */
+.send {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #9fc9b4;
+
+  background: linear-gradient(180deg, #b8dccc, #9fc9b4);
+  color: white;
+  cursor: pointer;
+
+  box-shadow: 0 8px 18px rgba(159, 201, 180, 0.35);
+}
+
+/* =========================================================
+   9. Responsive
+   ========================================================= */
+
+@media (max-width: 920px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
