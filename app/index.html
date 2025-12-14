@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BioConsult — Pastel RAG Chat (LLM)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sb-top">
+        <button class="iconbtn" title="Меню" aria-label="Меню">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+
+        <div class="brand">
+          <span class="logo" aria-hidden="true"></span>
+          <span>BioConsult</span>
+        </div>
+
+        <button class="iconbtn" title="Пошук" aria-label="Пошук">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="M20 20l-3.2-3.2"></path>
+          </svg>
+        </button>
+      </div>
+
+      <button class="newchat" id="newChatBtn">
+        <span class="badge"></span>
+        <span>Новий діалог</span>
+      </button>
+
+      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
+      <div class="sb-list" id="kbList"></div>
+
+      <div class="sb-footer">🧬 Консультант з біології • RAG у браузері</div>
+    </aside>
+
+    <main class="main" id="main">
+      <header class="topbar">
+        <div class="pill" id="apiPill" title="Налаштування LLM">
+          ⚙ API: <strong id="apiState">не налаштовано</strong>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="pill" id="ragToggleBtn" aria-pressed="true">🧠 RAG: увімкнено</button>
+          <div class="avatar" title="Профіль"></div>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="hero">
+          <div class="hello">
+            <span class="leafMark" aria-hidden="true"></span>
+            <span>Привіт! Я BioConsult</span>
+          </div>
+          <h1 class="title">Навчай мене своїми матеріалами — і я відповідатиму точніше</h1>
+          <div class="subtitle">
+            Натисни “+” → додай .txt/.md (це буде база знань). Потім став запитання —
+            я знайду релевантні фрагменти і відповім через LLM, показавши джерела.
+          </div>
+        </div>
+
+        <div class="chatlog" id="chatLog" aria-live="polite"></div>
+      </section>
+
+      <div class="composer-wrap">
+        <div class="composer-area">
+          <div class="composer" id="composer">
+
+            <div class="plusMenu" id="plusMenu" role="menu" aria-label="Меню додавання">
+              <div class="pmTitle">
+                <span>Додати</span>
+                <button class="iconbtn" id="closePlusMenu" title="Закрити" aria-label="Закрити" style="width:32px;height:32px;">✕</button>
+              </div>
+              <div class="pmGrid">
+                <button class="pmBtn" id="pmAddImageFile" type="button">
+                  <div class="l">🖼️ Додати зображення (файл)</div>
+                  <div class="r">jpg/png/webp</div>
+                </button>
+                <button class="pmBtn" id="pmAddImageUrl" type="button">
+                  <div class="l">☁️ Додати зображення з хмари (URL)</div>
+                  <div class="r">посилання</div>
+                </button>
+                <button class="pmBtn" id="pmAddTextFile" type="button">
+                  <div class="l">📄 Додати матеріал (.txt/.md)</div>
+                  <div class="r">навчити RAG</div>
+                </button>
+                <button class="pmBtn" id="pmClearKB" type="button">
+                  <div class="l">🧽 Очистити базу знань</div>
+                  <div class="r">RAG</div>
+                </button>
+                <button class="pmBtn" id="pmClearChat" type="button">
+                  <div class="l">🧹 Очистити чат</div>
+                  <div class="r">скинути</div>
+                </button>
+              </div>
+              <div class="tiny">Порада: додай кілька конспектів .txt/.md — відповіді стануть “під твою програму”.</div>
+            </div>
+
+            <div class="composer-row">
+              <button class="plus" id="plusBtn" title="Додати" aria-label="Додати">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+              </button>
+
+              <div class="input">
+                <textarea id="prompt" placeholder="Запитайте BioConsult…" rows="1"></textarea>
+              </div>
+
+              <div class="tools">
+                <button class="send" id="sendBtn" title="Надіслати" aria-label="Надіслати">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14"></path>
+                    <path d="M13 5l7 7-7 7"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="chips" id="chips">
+              <div class="chip">🌿 Поясни фотосинтез</div>
+              <div class="chip">🧬 Що таке реплікація ДНК?</div>
+              <div class="chip">🦠 Різниця вірус/бактерія</div>
+              <div class="chip">🧠 Мітоз vs мейоз</div>
+            </div>
+
+            <div class="hint">
+              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — матеріали/зображення</span>
+              <span id="statusText">Готово</span>
+            </div>
+
+            <input id="imageInput" type="file" accept="image/*" hidden />
+            <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: Image URL -->
+  <div class="modalOverlay" id="imgModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Додати зображення за URL">
+      <h3>Додати зображення з хмари (URL)</h3>
+      <p>Встав пряме посилання на зображення (або публічний URL). Якщо доступ закритий — браузер/LLM не зможе завантажити.</p>
+      <div class="row">
+        <input id="imgUrlInput" placeholder="https://..." />
+      </div>
+      <div class="modalActions">
+        <button class="btn" id="cancelImgModal">Скасувати</button>
+        <button class="btn primary" id="addUrlBtn">Додати</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: API SETTINGS -->
+  <div class="modalOverlay" id="apiModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Налаштування API">
+      <h3>Налаштування LLM API</h3>
+      <p>
+        Встав API key і модель. Це потрібно, щоб бот відповідав “по-справжньому”.
+        (Ключ зберігається локально в браузері.)
+      </p>
+
+      <div class="row">
+        <input id="apiKeyInput" placeholder="OpenAI API key (sk-...)" />
+      </div>
+
+      <div class="row">
+        <input id="modelInput" placeholder="Модель (наприклад: gpt-4o-mini)" />
+      </div>
+
+      <div class="tiny">
+        Якщо модель не працює — заміни назву (в акаунті можуть бути доступні інші моделі).
+      </div>
+
+      <div class="modalActions">
+        <button class="btn" id="apiCancel">Скасувати</button>
+        <button class="btn" id="apiClear">Очистити</button>
+        <button class="btn primary" id="apiSave">Зберегти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN JS -->
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
