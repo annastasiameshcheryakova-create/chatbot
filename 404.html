@@ -2,9 +2,16 @@
 <html lang="uk">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=./app/index.html" />
+  <title>BioConsult</title>
+
+  <!-- правильний редирект -->
+  <meta http-equiv="refresh" content="0; url=./app/" />
+
   <script>
-    location.replace(".index.html");
+    // JS-редирект як fallback
+    if (location.pathname.endsWith("/chatbot/") || location.pathname.endsWith("/chatbot/index.html")) {
+      location.replace("./app/");
+    }
   </script>
 </head>
 <body></body>
