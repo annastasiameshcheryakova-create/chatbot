@@ -6,9 +6,15 @@
   <title>BioConsult</title>
 
   <script>
-    // ВАЖЛИВО: для project pages URL завжди /chatbot/
+    // project pages: /chatbot/
+    const BASE = "/chatbot/";
     const TARGET = "/chatbot/app/";
-    if (location.pathname !== TARGET && !location.pathname.startsWith(TARGET)) {
+
+    // редирект ТІЛЬКИ якщо ми рівно на /chatbot/ або /chatbot/index.html
+    if (
+      location.pathname === BASE ||
+      location.pathname === BASE + "index.html"
+    ) {
       location.replace(TARGET);
     }
   </script>
