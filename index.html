@@ -5,11 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BioConsult</title>
 
-  <!-- Важливо: для Project Pages (/chatbot/) робимо редірект відносним шляхом -->
-  <meta http-equiv="refresh" content="0; url=./app/index.html" />
   <script>
-    location.replace("./app/index.html");
+    // ВАЖЛИВО: для project pages URL завжди /chatbot/
+    const TARGET = "/chatbot/app/";
+    if (location.pathname !== TARGET && !location.pathname.startsWith(TARGET)) {
+      location.replace(TARGET);
+    }
   </script>
+
+  <noscript>
+    <meta http-equiv="refresh" content="0; url=/chatbot/app/" />
+  </noscript>
 </head>
 <body></body>
 </html>
