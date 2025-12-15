@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BioConsult</title>
 
-  <!-- швидкий редірект -->
-  <meta http-equiv="refresh" content="0; url=app/index.html" />
-
+  <!-- Важливо: для Project Pages (/chatbot/) робимо редірект відносним шляхом -->
+  <meta http-equiv="refresh" content="0; url=./app/index.html" />
   <script>
-    // надійніший редірект (якщо meta не спрацює)
-    location.replace("app/index.html");
+    location.replace("./app/index.html");
   </script>
 </head>
 <body></body>
