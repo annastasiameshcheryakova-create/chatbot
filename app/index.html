@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BioConsult — Pastel RAG Chat (LLM)</title>
+  <title>BioConsult — RAG без API (локальний режим)</title>
 
   <style>
     :root{
@@ -223,7 +223,7 @@
       background:#f7fcfa;
     }
     .src .t{ font-weight:650; color:#365248; }
-    .src .s{ margin-top:4px; }
+    .src .s{ margin-top:6px; white-space:pre-wrap; }
 
     .msg .imgwrap{
       margin-top:10px;
@@ -488,8 +488,8 @@
 
     <main class="main" id="main">
       <header class="topbar">
-        <div class="pill" id="apiPill" title="Налаштування LLM">
-          ⚙ API: <strong id="apiState">не налаштовано</strong>
+        <div class="pill" id="apiPill" title="Режим без API">
+          ⚙ Режим: <strong id="apiState">без API</strong>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
           <button class="pill" id="ragToggleBtn" aria-pressed="true">🧠 RAG: увімкнено</button>
@@ -503,10 +503,10 @@
             <span class="leafMark" aria-hidden="true"></span>
             <span>Привіт! Я BioConsult</span>
           </div>
-          <h1 class="title">Навчай мене своїми матеріалами — і я відповідатиму точніше</h1>
+          <h1 class="title">Працюю без API — відповідаю з твоїх записів</h1>
           <div class="subtitle">
-            Натисни “+” → додай .txt/.md (це буде база знань). АБО просто тримай свої конспекти в <b>data/raw/</b> —
-            я можу підтягувати їх автоматично при запуску.
+            Натисни “+” → додай .txt/.md (це буде база знань). Потім став запитання —
+            я знайду релевантні фрагменти і покажу відповідь як витяг з твоїх матеріалів.
           </div>
         </div>
 
@@ -523,25 +523,10 @@
                 <button class="iconbtn" id="closePlusMenu" title="Закрити" aria-label="Закрити" style="width:32px;height:32px;">✕</button>
               </div>
               <div class="pmGrid">
-                <button class="pmBtn" id="pmAddImageFile" type="button">
-                  <div class="l">🖼️ Додати зображення (файл)</div>
-                  <div class="r">jpg/png/webp</div>
-                </button>
-                <button class="pmBtn" id="pmAddImageUrl" type="button">
-                  <div class="l">☁️ Додати зображення з хмари (URL)</div>
-                  <div class="r">посилання</div>
-                </button>
                 <button class="pmBtn" id="pmAddTextFile" type="button">
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
-                  <div class="r">навчити RAG</div>
+                  <div class="r">для RAG</div>
                 </button>
-
-                <!-- NEW: load notes from repo -->
-                <button class="pmBtn" id="pmLoadRepoNotes" type="button">
-                  <div class="l">📥 Завантажити конспекти з репо</div>
-                  <div class="r">data/raw</div>
-                </button>
-
                 <button class="pmBtn" id="pmClearKB" type="button">
                   <div class="l">🧽 Очистити базу знань</div>
                   <div class="r">RAG</div>
@@ -551,9 +536,7 @@
                   <div class="r">скинути</div>
                 </button>
               </div>
-              <div class="tiny">
-                Порада: поклади файли в <b>data/raw/</b> і (за бажання) створи <b>data/raw/manifest.json</b> — тоді вони підвантажаться самі.
-              </div>
+              <div class="tiny">Порада: додай 3–10 конспектів .txt/.md — пошук стане точнішим.</div>
             </div>
 
             <div class="composer-row">
@@ -585,61 +568,16 @@
             </div>
 
             <div class="hint">
-              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — матеріали/зображення</span>
+              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — матеріали</span>
               <span id="statusText">Готово</span>
             </div>
 
-            <!-- hidden inputs -->
-            <input id="imageInput" type="file" accept="image/*" hidden />
+            <!-- hidden input -->
             <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
           </div>
         </div>
       </div>
     </main>
-  </div>
-
-  <!-- MODAL: Image URL -->
-  <div class="modalOverlay" id="imgModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Додати зображення за URL">
-      <h3>Додати зображення з хмари (URL)</h3>
-      <p>Встав пряме посилання на зображення (або публічний URL). Якщо доступ закритий — браузер/LLM не зможе завантажити.</p>
-      <div class="row">
-        <input id="imgUrlInput" placeholder="https://..." />
-      </div>
-      <div class="modalActions">
-        <button class="btn" id="cancelImgModal">Скасувати</button>
-        <button class="btn primary" id="addUrlBtn">Додати</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: API SETTINGS -->
-  <div class="modalOverlay" id="apiModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Налаштування API">
-      <h3>Налаштування LLM API</h3>
-      <p>
-        Встав API key і модель. Це потрібно, щоб бот відповідав “по-справжньому”.
-        (Ключ зберігається локально в браузері.)
-      </p>
-
-      <div class="row">
-        <input id="apiKeyInput" placeholder="OpenAI API key (sk-...)" />
-      </div>
-
-      <div class="row">
-        <input id="modelInput" placeholder="Модель (наприклад: gpt-4o-mini)" />
-      </div>
-
-      <div class="tiny">
-        Якщо модель не працює — заміни назву (в акаунті можуть бути доступні інші моделі).
-      </div>
-
-      <div class="modalActions">
-        <button class="btn" id="apiCancel">Скасувати</button>
-        <button class="btn" id="apiClear">Очистити</button>
-        <button class="btn primary" id="apiSave">Зберегти</button>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -654,44 +592,22 @@
     const statusText = document.getElementById('statusText');
 
     const ragToggleBtn = document.getElementById('ragToggleBtn');
-    const apiPill = document.getElementById('apiPill');
-    const apiState = document.getElementById('apiState');
 
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const closePlusMenu = document.getElementById('closePlusMenu');
 
-    const pmAddImageFile = document.getElementById('pmAddImageFile');
-    const pmAddImageUrl  = document.getElementById('pmAddImageUrl');
     const pmAddTextFile  = document.getElementById('pmAddTextFile');
     const pmClearChat    = document.getElementById('pmClearChat');
     const pmClearKB      = document.getElementById('pmClearKB');
-    const pmLoadRepoNotes = document.getElementById('pmLoadRepoNotes');
 
-    const imageInput = document.getElementById('imageInput');
     const textInput  = document.getElementById('textInput');
-
-    const imgModalOverlay = document.getElementById('imgModalOverlay');
-    const imgUrlInput = document.getElementById('imgUrlInput');
-    const cancelImgModal = document.getElementById('cancelImgModal');
-    const addUrlBtn = document.getElementById('addUrlBtn');
-
-    const apiModalOverlay = document.getElementById('apiModalOverlay');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const modelInput = document.getElementById('modelInput');
-    const apiCancel = document.getElementById('apiCancel');
-    const apiClear = document.getElementById('apiClear');
-    const apiSave = document.getElementById('apiSave');
 
     const kbList = document.getElementById('kbList');
     const kbCount = document.getElementById('kbCount');
 
     let ragEnabled = true;
     let busy = false;
-
-    // attachments for current message
-    let pendingImageDataUrl = null; // data:image/... base64 OR normal URL
-    let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
 
@@ -712,15 +628,15 @@
       if (who === "bot" && Array.isArray(sources) && sources.length) {
         const s = document.createElement('div');
         s.className = "sources";
-        s.textContent = "Джерела (RAG):";
+        s.textContent = "Джерела (з твоїх файлів):";
 
-        sources.forEach(src => {
+        sources.forEach((src, idx) => {
           const item = document.createElement('div');
           item.className = "src";
 
           const t = document.createElement('div');
           t.className = "t";
-          t.textContent = src.title || "Джерело";
+          t.textContent = `[#${idx+1}] ${src.title || "Джерело"}`;
 
           const sn = document.createElement('div');
           sn.className = "s";
@@ -733,23 +649,6 @@
 
         div.appendChild(s);
       }
-
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function addImagePreviewMessage({ dataUrl, caption, who="user" }){
-      const div = document.createElement('div');
-      div.className = `msg ${who}`;
-      div.textContent = caption || "Зображення додано:";
-
-      const wrap = document.createElement('div');
-      wrap.className = "imgwrap";
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = "image";
-      wrap.appendChild(img);
-      div.appendChild(wrap);
 
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
@@ -771,9 +670,7 @@
       if (!plusMenu.contains(e.target) && e.target !== plusBtn) closeMenu();
     });
 
-    pmAddImageFile.addEventListener('click', () => { closeMenu(); imageInput.click(); });
     pmAddTextFile.addEventListener('click', () => { closeMenu(); textInput.click(); });
-    pmAddImageUrl.addEventListener('click', () => { closeMenu(); openImgModal(); });
 
     pmClearChat.addEventListener('click', () => {
       closeMenu();
@@ -792,80 +689,6 @@
       setStatus("Готово");
     });
 
-    pmLoadRepoNotes.addEventListener('click', async () => {
-      closeMenu();
-      setStatus("Завантажую конспекти з репо…");
-      const added = await seedKBFromRepo(true);
-      RAG.rebuildIndexFromKB();
-      renderKB();
-      addMsg(added
-        ? `✅ Додано ${added} конспект(ів) з репо у базу знань.`
-        : `ℹ️ Конспекти з репо вже були в базі знань або не знайдені.`,
-        "bot"
-      );
-      setStatus("Готово");
-    });
-
-    /***********************
-     * Image modal
-     ***********************/
-    function openImgModal(){
-      imgModalOverlay.classList.add("open");
-      imgModalOverlay.setAttribute("aria-hidden","false");
-      imgUrlInput.value = "";
-      setTimeout(() => imgUrlInput.focus(), 0);
-    }
-    function closeImgModal(){
-      imgModalOverlay.classList.remove("open");
-      imgModalOverlay.setAttribute("aria-hidden","true");
-    }
-    cancelImgModal.addEventListener('click', closeImgModal);
-    imgModalOverlay.addEventListener('click', (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
-
-    addUrlBtn.addEventListener('click', async () => {
-      const url = (imgUrlInput.value || "").trim();
-      if(!url) return;
-
-      pendingImageDataUrl = url;
-      pendingImageLabel = "Зображення (URL)";
-      addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
-      closeImgModal();
-    });
-
-    /***********************
-     * API modal
-     ***********************/
-    function openApiModal(){
-      apiModalOverlay.classList.add("open");
-      apiModalOverlay.setAttribute("aria-hidden","false");
-      apiKeyInput.value = Settings.getApiKey() || "";
-      modelInput.value = Settings.getModel() || "gpt-4o-mini";
-      setTimeout(() => apiKeyInput.focus(), 0);
-    }
-    function closeApiModal(){
-      apiModalOverlay.classList.remove("open");
-      apiModalOverlay.setAttribute("aria-hidden","true");
-    }
-    apiPill.addEventListener('click', openApiModal);
-    apiCancel.addEventListener('click', closeApiModal);
-
-    apiClear.addEventListener('click', () => {
-      Settings.clear();
-      updateApiState();
-      addMsg("API налаштування очищено.", "bot");
-      closeApiModal();
-    });
-
-    apiSave.addEventListener('click', () => {
-      const key = (apiKeyInput.value || "").trim();
-      const model = (modelInput.value || "").trim() || "gpt-4o-mini";
-      Settings.setApiKey(key);
-      Settings.setModel(model);
-      updateApiState();
-      addMsg("✅ API налаштування збережено. Можна спілкуватись.", "bot");
-      closeApiModal();
-    });
-
     /***********************
      * RAG toggle
      ***********************/
@@ -879,26 +702,6 @@
     /***********************
      * Inputs
      ***********************/
-    imageInput.addEventListener('change', async () => {
-      const file = imageInput.files?.[0];
-      if(!file) return;
-
-      if(!file.type.startsWith("image/")){
-        addMsg("❌ Це не зображення.", "bot");
-        imageInput.value = "";
-        return;
-      }
-
-      const dataUrl = await fileToDataURL(file);
-      pendingImageDataUrl = dataUrl;
-      pendingImageLabel = file.name;
-
-      addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Тепер можеш написати питання про це зображення.", "bot");
-
-      imageInput.value = "";
-    });
-
     textInput.addEventListener('change', async () => {
       const file = textInput.files?.[0];
       if(!file) return;
@@ -935,7 +738,7 @@
     });
 
     /***********************
-     * Send
+     * Send (NO API)
      ***********************/
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
@@ -945,12 +748,53 @@
       }
     });
 
+    function normalizeQuestion(q){
+      return (q || "").trim().replace(/\s+/g, " ");
+    }
+
+    function localAnswerFromContexts(question, contexts){
+      if(!contexts.length){
+        return {
+          answer:
+            "Я не знайшов релевантних фрагментів у твоїх матеріалах.\n\n" +
+            "Спробуй:\n" +
+            "• додати більше конспектів (.txt/.md)\n" +
+            "• поставити питання іншими словами\n" +
+            "• вказати ключові терміни з твоїх записів",
+          sources: []
+        };
+      }
+
+      // Простий “витяг”: беремо 2–4 найбільш схожих фрагменти і показуємо їх як відповідь.
+      const top = contexts.slice(0, 4);
+
+      // Спробуємо зробити короткий конспект: перші 2 речення з кожного фрагмента
+      const bullets = top.map((c, i) => {
+        const s = (c.text || "").trim();
+        const parts = s.split(/(?<=[.!?])\s+/).filter(Boolean);
+        const short = parts.slice(0, 2).join(" ").trim() || s.slice(0, 240);
+        return `[#${i+1}] ${short}`;
+      });
+
+      const answer =
+        `Ось що є у твоїх записах по запиту: “${question}”\n\n` +
+        bullets.map(b => "• " + b).join("\n") +
+        "\n\n(Це режим без API: я показую витяг з найбільш релевантних фрагментів.)";
+
+      const sources = top.map(c => ({
+        title: c.title,
+        snippet: (c.text || "").slice(0, 500) + ((c.text || "").length > 500 ? "…" : "")
+      }));
+
+      return { answer, sources };
+    }
+
     async function send(){
-      const text = (promptEl.value || "").trim();
+      const text = normalizeQuestion(promptEl.value);
       if(!text || busy) return;
 
       busy = true;
-      setStatus("Пишу відповідь…");
+      setStatus("Шукаю у твоїх матеріалах…");
       sendBtn.disabled = true;
 
       addMsg(text, "user");
@@ -958,29 +802,9 @@
       autoResize();
 
       try{
-        const apiKey = Settings.getApiKey();
-        const model = Settings.getModel() || "gpt-4o-mini";
-
-        if(!apiKey){
-          addMsg("⚠️ API не налаштовано. Натисни “⚙ API” і встав ключ, тоді я відповідатиму реально.", "bot");
-          setStatus("Потрібен API key");
-          return;
-        }
-
         const contexts = ragEnabled ? RAG.retrieveTopK(text, 4) : [];
-        const { answer, sources } = await LLM.answer({
-          apiKey,
-          model,
-          userText: text,
-          contexts,
-          image: pendingImageDataUrl ? { url: pendingImageDataUrl, label: pendingImageLabel } : null
-        });
-
-        addMsg(answer || "Немає відповіді", "bot", sources);
-
-        pendingImageDataUrl = null;
-        pendingImageLabel = null;
-
+        const { answer, sources } = localAnswerFromContexts(text, contexts);
+        addMsg(answer, "bot", sources);
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -989,27 +813,6 @@
         busy = false;
         sendBtn.disabled = false;
       }
-    }
-
-    /***********************
-     * Settings storage
-     ***********************/
-    const Settings = {
-      kApiKey: "bioconsult_api_key",
-      kModel: "bioconsult_model",
-      getApiKey(){ return localStorage.getItem(this.kApiKey) || ""; },
-      setApiKey(v){ localStorage.setItem(this.kApiKey, v || ""); },
-      getModel(){ return localStorage.getItem(this.kModel) || ""; },
-      setModel(v){ localStorage.setItem(this.kModel, v || ""); },
-      clear(){
-        localStorage.removeItem(this.kApiKey);
-        localStorage.removeItem(this.kModel);
-      }
-    };
-
-    function updateApiState(){
-      const hasKey = !!Settings.getApiKey();
-      apiState.textContent = hasKey ? "налаштовано" : "не налаштовано";
     }
 
     /***********************
@@ -1049,7 +852,7 @@
       if(docs.length === 0){
         const empty = document.createElement("div");
         empty.className = "sb-item";
-        empty.textContent = "Додай .txt/.md через “+” або завантаж з репо";
+        empty.textContent = "Додай .txt/.md через “+”";
         kbList.appendChild(empty);
         return;
       }
@@ -1089,78 +892,10 @@
     }
 
     /***********************
-     * ✅ AUTO-LOAD NOTES FROM REPO (data/raw)
-     * Працює на GitHub Pages.
-     *
-     * 1) Якщо є ../data/raw/manifest.json -> бере список з нього
-     * 2) Якщо нема -> тягне ../data/raw/biology_basics.txt
-     ***********************/
-    function abs(rel){
-      // робить правильний URL навіть на GitHub Pages /chatbot/...
-      return new URL(rel, window.location.href).toString();
-    }
-
-    async function fetchTextIfExists(url){
-      const res = await fetch(url, { cache: "no-store" });
-      if(!res.ok) return null;
-      return await res.text();
-    }
-
-    async function loadManifest(){
-      // Маніфест має бути JSON:
-      // [ {"title":"bio.txt","url":"../data/raw/bio.txt"}, ... ]
-      const url = abs("../data/raw/manifest.json");
-      try{
-        const res = await fetch(url, { cache:"no-store" });
-        if(!res.ok) return null;
-        const data = await res.json();
-        if(!Array.isArray(data)) return null;
-        // нормалізуємо
-        return data
-          .filter(x => x && typeof x.title === "string" && typeof x.url === "string")
-          .map(x => ({ title: x.title.trim(), url: abs(x.url) }));
-      }catch{
-        return null;
-      }
-    }
-
-    async function seedKBFromRepo(showErrors=false){
-      const existing = KB.getAll();
-      const hasTitle = (t) => existing.some(d => (d.title || "").toLowerCase() === (t || "").toLowerCase());
-
-      let list = await loadManifest();
-
-      if(!list){
-        // fallback на твій файл
-        list = [
-          { title: "biology_basics.txt", url: abs("../data/raw/biology_basics.txt") }
-        ];
-      }
-
-      let added = 0;
-
-      for(const item of list){
-        if(!item?.title || !item?.url) continue;
-        if(hasTitle(item.title)) continue; // вже є
-
-        const text = await fetchTextIfExists(item.url);
-        if(!text){
-          if(showErrors) addMsg(`⚠️ Не можу завантажити: ${item.title} (${item.url})`, "bot");
-          continue;
-        }
-
-        KB.addDoc({ title: item.title, text });
-        added++;
-      }
-
-      return added;
-    }
-
-    /***********************
      * RAG in browser (TF-IDF-ish)
      ***********************/
     const RAG = (() => {
-      let chunks = [];     // {title, text, vec}
+      let chunks = [];     // {title, text, id, vec}
       let stats = null;    // {df, N}
 
       function tokenize(text) {
@@ -1249,128 +984,14 @@
     })();
 
     /***********************
-     * LLM call (OpenAI Responses API)
-     ***********************/
-    const LLM = (() => {
-      function buildSystem(){
-        return [
-          "Ти — BioConsult, консультант з біології.",
-          "Відповідай українською, просто і точно.",
-          "Якщо є RAG-контекст — використовуй його в першу чергу.",
-          "Якщо даних недостатньо — скажи, що саме потрібно уточнити.",
-          "Додай короткий блок 'Джерела' з позначками [#1], [#2] (тільки якщо використовував контекст)."
-        ].join("\n");
-      }
-
-      function buildContextBlock(contexts){
-        if(!contexts?.length) return "";
-        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\n\n");
-      }
-
-      function sourcesFromContexts(contexts){
-        return (contexts || []).map(c => ({
-          title: c.title,
-          snippet: (c.text || "").slice(0, 200) + ((c.text || "").length > 200 ? "…" : "")
-        }));
-      }
-
-      function extractOutputText(data){
-        if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
-
-        const out = data?.output;
-        if (Array.isArray(out)) {
-          for (const item of out) {
-            const content = item?.content;
-            if (Array.isArray(content)) {
-              for (const c of content) {
-                if (c?.type === "output_text" && typeof c?.text === "string") return c.text;
-                if (c?.type === "text" && typeof c?.text === "string") return c.text;
-              }
-            }
-          }
-        }
-        return "";
-      }
-
-      async function answer({ apiKey, model, userText, contexts, image }){
-        const system = buildSystem();
-        const ctx = buildContextBlock(contexts);
-
-        const userParts = [];
-        userParts.push({ type:"text", text: userText });
-
-        if (image?.url) {
-          userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
-          userParts.push({ type:"image_url", image_url: { url: image.url } });
-        }
-
-        if (ctx) {
-          userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
-        }
-
-        const body = {
-          model: model || "gpt-4o-mini",
-          input: [
-            { role:"system", content:[{ type:"text", text: system }] },
-            { role:"user", content: userParts }
-          ]
-        };
-
-        const res = await fetch("https://api.openai.com/v1/responses", {
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json",
-            "Authorization":"Bearer " + apiKey
-          },
-          body: JSON.stringify(body)
-        });
-
-        if(!res.ok){
-          const t = await res.text();
-          throw new Error(t || ("HTTP " + res.status));
-        }
-
-        const data = await res.json();
-        const text = extractOutputText(data) || "(порожня відповідь)";
-
-        return { answer: text, sources: sourcesFromContexts(contexts) };
-      }
-
-      return { answer };
-    })();
-
-    /***********************
-     * Helpers
-     ***********************/
-    function fileToDataURL(file){
-      return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
-    }
-
-    /***********************
      * Init
      ***********************/
-    async function init(){
-      updateApiState();
-      autoResize();
-      setStatus("Завантажую базу…");
-
-      // 1) Підвантажуємо конспекти з репо (один раз при першому запуску)
-      const added = await seedKBFromRepo(false);
-
-      // 2) Будуємо індекс
+    function init(){
       renderKB();
       RAG.rebuildIndexFromKB();
-
-      if(added){
-        addMsg(`✅ Автоматично додано конспекти з репо: ${added} файл(ів).`, "bot");
-      }
-
+      autoResize();
       setStatus("Готово");
+      addMsg("✅ Режим без API увімкнено. Додай .txt/.md через “+”, і я відповідатиму з твоїх записів.", "bot");
     }
     init();
   </script>
