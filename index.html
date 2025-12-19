@@ -1,13 +1,22 @@
+<!-- =========================
+1) /index.html (в корне репозитория)
+Редирект на /app/index.html для GitHub Pages
+========================= -->
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BioConsult</title>
-  <meta http-equiv="refresh" content="0; url=app/index.html">
+
+  <meta http-equiv="refresh" content="0; url=app/index.html" />
+  <script>
+    location.replace("./app/index.html");
+  </script>
 </head>
 <body>
-  Якщо не перекинуло автоматично:
-  <a href="app/index.html">відкрити BioConsult</a>
+  <noscript>
+    <a href="./app/index.html">Відкрити BioConsult</a>
+  </noscript>
 </body>
 </html>
