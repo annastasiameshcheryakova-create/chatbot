@@ -1,41 +1,13 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>BioConsult</title>
-
-  <!-- GitHub Pages / браузер: редирект в папку app -->
-  <meta http-equiv="refresh" content="0; url=./app/index.html" />
-
-  <script>
-    // Надёжный редирект (работает даже если meta refresh отключён)
-    (function () {
-      var target = "./app/index.html";
-
-      // если сайт открыт из подпапки GitHub Pages, это всё равно сработает
-      // потому что путь относительный от текущего index.html
-      if (location.pathname.endsWith("/")) {
-        // /repo/  -> /repo/app/index.html
-        location.replace(target);
-      } else if (location.pathname.endsWith("/index.html")) {
-        // /repo/index.html -> /repo/app/index.html
-        location.replace(target);
-      } else {
-        // любой другой случай — тоже редиректим
-        location.replace(target);
-      }
-    })();
-  </script>
-
-  <noscript>
-    <style>body{font-family:system-ui,Segoe UI,Arial;margin:24px;}</style>
-  </noscript>
+  <meta http-equiv="refresh" content="0; url=app/index.html">
 </head>
 <body>
-  <noscript>
-    JavaScript вимкнено. Перейди вручну:
-    <a href="./app/index.html">відкрити BioConsult</a>
-  </noscript>
+  Якщо не перекинуло автоматично:
+  <a href="app/index.html">відкрити BioConsult</a>
 </body>
 </html>
