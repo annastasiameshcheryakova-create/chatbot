@@ -697,7 +697,7 @@
     let busy = false;
 
     // attachments for current message
-    let pendingImageDataUrl = null; // data:image/... base64
+    let pendingImageDataUrl = null; // data:image/... base64 OR normal URL
     let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -819,9 +819,6 @@
       const url = (imgUrlInput.value || "").trim();
       if(!url) return;
 
-      // Для LLM простіше мати dataURL. Але з URL теж можна — якщо він відкритий.
-      // Тут залишаємо URL як data source (покажемо в чаті як preview через <img src=url>)
-      // У LLM відправимо як image_url (URL) — якщо модель/доступ дозволяє.
       pendingImageDataUrl = url;
       pendingImageLabel = "Зображення (URL)";
       addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
@@ -958,7 +955,6 @@
         const model = Settings.getModel() || "gpt-4o-mini";
 
         if(!apiKey){
-          // fallback demo
           addMsg("⚠️ API не налаштовано. Натисни “⚙ API” і встав ключ, тоді я відповідатиму реально.", "bot");
           setStatus("Потрібен API key");
           return;
@@ -1090,7 +1086,7 @@
      * RAG in browser (TF-IDF-ish)
      ***********************/
     const RAG = (() => {
-      let chunks = [];     // {title, text}
+      let chunks = [];     // {title, text, vec}
       let stats = null;    // {df, N}
 
       function tokenize(text) {
@@ -1164,7 +1160,6 @@
           });
         }
         stats = buildVocabStats(chunks);
-        // precompute vectors
         chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
@@ -1190,12 +1185,12 @@
           "Якщо є RAG-контекст — використовуй його в першу чергу.",
           "Якщо даних недостатньо — скажи, що саме потрібно уточнити.",
           "Додай короткий блок 'Джерела' з позначками [#1], [#2] (тільки якщо використовував контекст)."
-        ].join("\n");
+        ].join("\\n");
       }
 
       function buildContextBlock(contexts){
         if(!contexts?.length) return "";
-        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\n\n");
+        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\\n\\n");
       }
 
       function sourcesFromContexts(contexts){
@@ -1206,10 +1201,8 @@
       }
 
       function extractOutputText(data){
-        // Modern Responses API often returns "output_text"
         if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
 
-        // fallback parsing
         const out = data?.output;
         if (Array.isArray(out)) {
           for (const item of out) {
@@ -1232,15 +1225,13 @@
         const userParts = [];
         userParts.push({ type:"text", text: userText });
 
-        // if image provided: send as image_url (data URL or normal URL)
         if (image?.url) {
-          userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
+          userParts.push({ type:"text", text: `\\n(Додано зображення: ${image.label || "image"})\\n` });
           userParts.push({ type:"image_url", image_url: { url: image.url } });
         }
 
-        // Include RAG context as a separate text part (so model sees it clearly)
         if (ctx) {
-          userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
+          userParts.push({ type:"text", text: `\\n\\nКонтекст (RAG):\\n${ctx}` });
         }
 
         const body = {
@@ -1299,13 +1290,4 @@
     init();
   </script>
 </body>
-</html>
-<!doctype html>
-<html lang="uk">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=app/index.html">
-  <script>location.replace("app/index.html")</script>
-</head>
-<body></body>
 </html>
