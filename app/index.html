@@ -299,23 +299,6 @@
 
     .tools{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
 
-    .toolbtn{
-      height:36px;
-      padding:0 12px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#ffffff;
-      color:#3d544a;
-      font-size:13px;
-      cursor:pointer;
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      white-space:nowrap;
-      user-select:none;
-    }
-    .toolbtn:hover{ background:var(--accent-soft); border-color:#cfe6dc; }
-
     .send{
       width:40px;height:40px;border-radius:999px;
       border:1px solid #9fc9b4;
@@ -651,9 +634,6 @@
   </div>
 
   <script>
-    /***********************
-     * UI refs
-     ***********************/
     const promptEl = document.getElementById('prompt');
     const sendBtn  = document.getElementById('sendBtn');
     const chatLog  = document.getElementById('chatLog');
@@ -696,8 +676,7 @@
     let ragEnabled = true;
     let busy = false;
 
-    // attachments for current message
-    let pendingImageDataUrl = null; // data:image/... base64 OR normal URL
+    let pendingImageDataUrl = null;
     let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -708,9 +687,6 @@
     }
     promptEl.addEventListener('input', autoResize);
 
-    /***********************
-     * Chat render
-     ***********************/
     function addMsg(text, who="user", sources=[]) {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
@@ -762,9 +738,6 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    /***********************
-     * Plus menu
-     ***********************/
     function openMenu(){ plusMenu.classList.add("open"); }
     function closeMenu(){ plusMenu.classList.remove("open"); }
 
@@ -799,9 +772,6 @@
       setStatus("Готово");
     });
 
-    /***********************
-     * Image modal
-     ***********************/
     function openImgModal(){
       imgModalOverlay.classList.add("open");
       imgModalOverlay.setAttribute("aria-hidden","false");
@@ -815,19 +785,15 @@
     cancelImgModal.addEventListener('click', closeImgModal);
     imgModalOverlay.addEventListener('click', (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
 
-    addUrlBtn.addEventListener('click', async () => {
+    addUrlBtn.addEventListener('click', () => {
       const url = (imgUrlInput.value || "").trim();
       if(!url) return;
-
       pendingImageDataUrl = url;
       pendingImageLabel = "Зображення (URL)";
       addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
       closeImgModal();
     });
 
-    /***********************
-     * API modal
-     ***********************/
     function openApiModal(){
       apiModalOverlay.classList.add("open");
       apiModalOverlay.setAttribute("aria-hidden","false");
@@ -859,9 +825,6 @@
       closeApiModal();
     });
 
-    /***********************
-     * RAG toggle
-     ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
@@ -869,9 +832,6 @@
       setStatus(ragEnabled ? "RAG увімкнено" : "RAG вимкнено");
     });
 
-    /***********************
-     * Inputs
-     ***********************/
     imageInput.addEventListener('change', async () => {
       const file = imageInput.files?.[0];
       if(!file) return;
@@ -887,7 +847,7 @@
       pendingImageLabel = file.name;
 
       addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Тепер можеш написати питання про це зображення (наприклад: “що тут з точки зору біології?”).", "bot");
+      addMsg("Тепер можеш написати питання про це зображення.", "bot");
 
       imageInput.value = "";
     });
@@ -907,9 +867,6 @@
       textInput.value = "";
     });
 
-    /***********************
-     * Chips & new chat
-     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -927,9 +884,6 @@
       closeMenu();
     });
 
-    /***********************
-     * Send
-     ***********************/
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
       if(e.key === "Enter" && !e.shiftKey){
@@ -971,7 +925,6 @@
 
         addMsg(answer || "Немає відповіді", "bot", sources);
 
-        // reset attachments after send
         pendingImageDataUrl = null;
         pendingImageLabel = null;
 
@@ -985,9 +938,6 @@
       }
     }
 
-    /***********************
-     * Settings storage
-     ***********************/
     const Settings = {
       kApiKey: "bioconsult_api_key",
       kModel: "bioconsult_model",
@@ -1006,9 +956,6 @@
       apiState.textContent = hasKey ? "налаштовано" : "не налаштовано";
     }
 
-    /***********************
-     * KB storage (docs)
-     ***********************/
     const KB = {
       key: "bioconsult_kb_docs",
       getAll(){
@@ -1082,12 +1029,9 @@
       });
     }
 
-    /***********************
-     * RAG in browser (TF-IDF-ish)
-     ***********************/
     const RAG = (() => {
-      let chunks = [];     // {title, text, vec}
-      let stats = null;    // {df, N}
+      let chunks = [];
+      let stats = null;
 
       function tokenize(text) {
         return (text || "")
@@ -1174,9 +1118,6 @@
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
-    /***********************
-     * LLM call (OpenAI Responses API)
-     ***********************/
     const LLM = (() => {
       function buildSystem(){
         return [
@@ -1185,12 +1126,12 @@
           "Якщо є RAG-контекст — використовуй його в першу чергу.",
           "Якщо даних недостатньо — скажи, що саме потрібно уточнити.",
           "Додай короткий блок 'Джерела' з позначками [#1], [#2] (тільки якщо використовував контекст)."
-        ].join("\\n");
+        ].join("\n");
       }
 
       function buildContextBlock(contexts){
         if(!contexts?.length) return "";
-        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\\n\\n");
+        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\n\n");
       }
 
       function sourcesFromContexts(contexts){
@@ -1202,7 +1143,6 @@
 
       function extractOutputText(data){
         if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
-
         const out = data?.output;
         if (Array.isArray(out)) {
           for (const item of out) {
@@ -1222,17 +1162,14 @@
         const system = buildSystem();
         const ctx = buildContextBlock(contexts);
 
-        const userParts = [];
-        userParts.push({ type:"text", text: userText });
+        const userParts = [{ type:"text", text: userText }];
 
         if (image?.url) {
-          userParts.push({ type:"text", text: `\\n(Додано зображення: ${image.label || "image"})\\n` });
+          userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
           userParts.push({ type:"image_url", image_url: { url: image.url } });
         }
 
-        if (ctx) {
-          userParts.push({ type:"text", text: `\\n\\nКонтекст (RAG):\\n${ctx}` });
-        }
+        if (ctx) userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
 
         const body = {
           model: model || "gpt-4o-mini",
@@ -1258,16 +1195,12 @@
 
         const data = await res.json();
         const text = extractOutputText(data) || "(порожня відповідь)";
-
         return { answer: text, sources: sourcesFromContexts(contexts) };
       }
 
       return { answer };
     })();
 
-    /***********************
-     * Helpers
-     ***********************/
     function fileToDataURL(file){
       return new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -1277,9 +1210,6 @@
       });
     }
 
-    /***********************
-     * Init
-     ***********************/
     function init(){
       updateApiState();
       renderKB();
