@@ -405,7 +405,7 @@
     .modal h3{ margin:6px 6px 10px; font-size:16px; color:#203127; }
     .modal p{ margin:0 6px 10px; color:var(--muted); font-size:13px; line-height:1.35; }
     .modal .row{ display:flex; gap:10px; padding:6px; align-items:center; flex-wrap:wrap; }
-    .modal input, .modal select{
+    .modal input{
       flex:1;
       border-radius:12px;
       border:1px solid var(--line);
@@ -505,8 +505,8 @@
           </div>
           <h1 class="title">Навчай мене своїми матеріалами — і я відповідатиму точніше</h1>
           <div class="subtitle">
-            Натисни “+” → додай .txt/.md (це буде база знань). Потім став запитання —
-            я знайду релевантні фрагменти і відповім через LLM, показавши джерела.
+            Натисни “+” → додай .txt/.md (це буде база знань). АБО просто тримай свої конспекти в <b>data/raw/</b> —
+            я можу підтягувати їх автоматично при запуску.
           </div>
         </div>
 
@@ -535,6 +535,13 @@
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
                   <div class="r">навчити RAG</div>
                 </button>
+
+                <!-- NEW: load notes from repo -->
+                <button class="pmBtn" id="pmLoadRepoNotes" type="button">
+                  <div class="l">📥 Завантажити конспекти з репо</div>
+                  <div class="r">data/raw</div>
+                </button>
+
                 <button class="pmBtn" id="pmClearKB" type="button">
                   <div class="l">🧽 Очистити базу знань</div>
                   <div class="r">RAG</div>
@@ -544,7 +551,9 @@
                   <div class="r">скинути</div>
                 </button>
               </div>
-              <div class="tiny">Порада: додай кілька конспектів .txt/.md — відповіді стануть “під твою програму”.</div>
+              <div class="tiny">
+                Порада: поклади файли в <b>data/raw/</b> і (за бажання) створи <b>data/raw/manifest.json</b> — тоді вони підвантажаться самі.
+              </div>
             </div>
 
             <div class="composer-row">
@@ -634,6 +643,9 @@
   </div>
 
   <script>
+    /***********************
+     * UI refs
+     ***********************/
     const promptEl = document.getElementById('prompt');
     const sendBtn  = document.getElementById('sendBtn');
     const chatLog  = document.getElementById('chatLog');
@@ -654,6 +666,7 @@
     const pmAddTextFile  = document.getElementById('pmAddTextFile');
     const pmClearChat    = document.getElementById('pmClearChat');
     const pmClearKB      = document.getElementById('pmClearKB');
+    const pmLoadRepoNotes = document.getElementById('pmLoadRepoNotes');
 
     const imageInput = document.getElementById('imageInput');
     const textInput  = document.getElementById('textInput');
@@ -676,7 +689,8 @@
     let ragEnabled = true;
     let busy = false;
 
-    let pendingImageDataUrl = null;
+    // attachments for current message
+    let pendingImageDataUrl = null; // data:image/... base64 OR normal URL
     let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -687,6 +701,9 @@
     }
     promptEl.addEventListener('input', autoResize);
 
+    /***********************
+     * Chat render
+     ***********************/
     function addMsg(text, who="user", sources=[]) {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
@@ -738,6 +755,9 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    /***********************
+     * Plus menu
+     ***********************/
     function openMenu(){ plusMenu.classList.add("open"); }
     function closeMenu(){ plusMenu.classList.remove("open"); }
 
@@ -772,6 +792,23 @@
       setStatus("Готово");
     });
 
+    pmLoadRepoNotes.addEventListener('click', async () => {
+      closeMenu();
+      setStatus("Завантажую конспекти з репо…");
+      const added = await seedKBFromRepo(true);
+      RAG.rebuildIndexFromKB();
+      renderKB();
+      addMsg(added
+        ? `✅ Додано ${added} конспект(ів) з репо у базу знань.`
+        : `ℹ️ Конспекти з репо вже були в базі знань або не знайдені.`,
+        "bot"
+      );
+      setStatus("Готово");
+    });
+
+    /***********************
+     * Image modal
+     ***********************/
     function openImgModal(){
       imgModalOverlay.classList.add("open");
       imgModalOverlay.setAttribute("aria-hidden","false");
@@ -785,15 +822,19 @@
     cancelImgModal.addEventListener('click', closeImgModal);
     imgModalOverlay.addEventListener('click', (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
 
-    addUrlBtn.addEventListener('click', () => {
+    addUrlBtn.addEventListener('click', async () => {
       const url = (imgUrlInput.value || "").trim();
       if(!url) return;
+
       pendingImageDataUrl = url;
       pendingImageLabel = "Зображення (URL)";
       addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
       closeImgModal();
     });
 
+    /***********************
+     * API modal
+     ***********************/
     function openApiModal(){
       apiModalOverlay.classList.add("open");
       apiModalOverlay.setAttribute("aria-hidden","false");
@@ -825,6 +866,9 @@
       closeApiModal();
     });
 
+    /***********************
+     * RAG toggle
+     ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
@@ -832,6 +876,9 @@
       setStatus(ragEnabled ? "RAG увімкнено" : "RAG вимкнено");
     });
 
+    /***********************
+     * Inputs
+     ***********************/
     imageInput.addEventListener('change', async () => {
       const file = imageInput.files?.[0];
       if(!file) return;
@@ -867,6 +914,9 @@
       textInput.value = "";
     });
 
+    /***********************
+     * Chips & new chat
+     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -884,6 +934,9 @@
       closeMenu();
     });
 
+    /***********************
+     * Send
+     ***********************/
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
       if(e.key === "Enter" && !e.shiftKey){
@@ -938,6 +991,9 @@
       }
     }
 
+    /***********************
+     * Settings storage
+     ***********************/
     const Settings = {
       kApiKey: "bioconsult_api_key",
       kModel: "bioconsult_model",
@@ -956,6 +1012,9 @@
       apiState.textContent = hasKey ? "налаштовано" : "не налаштовано";
     }
 
+    /***********************
+     * KB storage (docs)
+     ***********************/
     const KB = {
       key: "bioconsult_kb_docs",
       getAll(){
@@ -990,7 +1049,7 @@
       if(docs.length === 0){
         const empty = document.createElement("div");
         empty.className = "sb-item";
-        empty.textContent = "Додай .txt/.md через “+”";
+        empty.textContent = "Додай .txt/.md через “+” або завантаж з репо";
         kbList.appendChild(empty);
         return;
       }
@@ -1029,9 +1088,80 @@
       });
     }
 
+    /***********************
+     * ✅ AUTO-LOAD NOTES FROM REPO (data/raw)
+     * Працює на GitHub Pages.
+     *
+     * 1) Якщо є ../data/raw/manifest.json -> бере список з нього
+     * 2) Якщо нема -> тягне ../data/raw/biology_basics.txt
+     ***********************/
+    function abs(rel){
+      // робить правильний URL навіть на GitHub Pages /chatbot/...
+      return new URL(rel, window.location.href).toString();
+    }
+
+    async function fetchTextIfExists(url){
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) return null;
+      return await res.text();
+    }
+
+    async function loadManifest(){
+      // Маніфест має бути JSON:
+      // [ {"title":"bio.txt","url":"../data/raw/bio.txt"}, ... ]
+      const url = abs("../data/raw/manifest.json");
+      try{
+        const res = await fetch(url, { cache:"no-store" });
+        if(!res.ok) return null;
+        const data = await res.json();
+        if(!Array.isArray(data)) return null;
+        // нормалізуємо
+        return data
+          .filter(x => x && typeof x.title === "string" && typeof x.url === "string")
+          .map(x => ({ title: x.title.trim(), url: abs(x.url) }));
+      }catch{
+        return null;
+      }
+    }
+
+    async function seedKBFromRepo(showErrors=false){
+      const existing = KB.getAll();
+      const hasTitle = (t) => existing.some(d => (d.title || "").toLowerCase() === (t || "").toLowerCase());
+
+      let list = await loadManifest();
+
+      if(!list){
+        // fallback на твій файл
+        list = [
+          { title: "biology_basics.txt", url: abs("../data/raw/biology_basics.txt") }
+        ];
+      }
+
+      let added = 0;
+
+      for(const item of list){
+        if(!item?.title || !item?.url) continue;
+        if(hasTitle(item.title)) continue; // вже є
+
+        const text = await fetchTextIfExists(item.url);
+        if(!text){
+          if(showErrors) addMsg(`⚠️ Не можу завантажити: ${item.title} (${item.url})`, "bot");
+          continue;
+        }
+
+        KB.addDoc({ title: item.title, text });
+        added++;
+      }
+
+      return added;
+    }
+
+    /***********************
+     * RAG in browser (TF-IDF-ish)
+     ***********************/
     const RAG = (() => {
-      let chunks = [];
-      let stats = null;
+      let chunks = [];     // {title, text, vec}
+      let stats = null;    // {df, N}
 
       function tokenize(text) {
         return (text || "")
@@ -1118,6 +1248,9 @@
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
+    /***********************
+     * LLM call (OpenAI Responses API)
+     ***********************/
     const LLM = (() => {
       function buildSystem(){
         return [
@@ -1143,6 +1276,7 @@
 
       function extractOutputText(data){
         if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
+
         const out = data?.output;
         if (Array.isArray(out)) {
           for (const item of out) {
@@ -1162,14 +1296,17 @@
         const system = buildSystem();
         const ctx = buildContextBlock(contexts);
 
-        const userParts = [{ type:"text", text: userText }];
+        const userParts = [];
+        userParts.push({ type:"text", text: userText });
 
         if (image?.url) {
           userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
           userParts.push({ type:"image_url", image_url: { url: image.url } });
         }
 
-        if (ctx) userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
+        if (ctx) {
+          userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
+        }
 
         const body = {
           model: model || "gpt-4o-mini",
@@ -1195,12 +1332,16 @@
 
         const data = await res.json();
         const text = extractOutputText(data) || "(порожня відповідь)";
+
         return { answer: text, sources: sourcesFromContexts(contexts) };
       }
 
       return { answer };
     })();
 
+    /***********************
+     * Helpers
+     ***********************/
     function fileToDataURL(file){
       return new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -1210,11 +1351,25 @@
       });
     }
 
-    function init(){
+    /***********************
+     * Init
+     ***********************/
+    async function init(){
       updateApiState();
+      autoResize();
+      setStatus("Завантажую базу…");
+
+      // 1) Підвантажуємо конспекти з репо (один раз при першому запуску)
+      const added = await seedKBFromRepo(false);
+
+      // 2) Будуємо індекс
       renderKB();
       RAG.rebuildIndexFromKB();
-      autoResize();
+
+      if(added){
+        addMsg(`✅ Автоматично додано конспекти з репо: ${added} файл(ів).`, "bot");
+      }
+
       setStatus("Готово");
     }
     init();
