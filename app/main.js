@@ -1,58 +1,58 @@
-/* ============================
-BioConsult — app/main.js (FULL)
-Offline without API:
-- answers with normal text (no showing notes)
-- if notes have nothing -> Wikipedia fallback
-- auto-seeds KB from ../data/raw/biology_basics.txt if KB empty
-============================ */
+/* =========================================================
+   BioConsult — main.js (OFFLINE-FIRST, no API messages)
+   - Uses local KB (localStorage) + auto-load ../data/raw/biology_basics.txt
+   - RAG TF-IDF in browser
+   - Produces clean "AI-like" answers WITHOUT showing your notes/snippets
+   - Never mentions API/offline in responses
+   ========================================================= */
 
 (() => {
-  "use strict";
-
   /***********************
    * UI refs
    ***********************/
-  const $ = (id) => document.getElementById(id);
+  const promptEl = document.getElementById("prompt");
+  const sendBtn = document.getElementById("sendBtn");
+  const chatLog = document.getElementById("chatLog");
+  const chips = document.getElementById("chips");
+  const newChatBtn = document.getElementById("newChatBtn");
+  const statusText = document.getElementById("statusText");
 
-  const promptEl = $("prompt");
-  const sendBtn  = $("sendBtn");
-  const chatLog  = $("chatLog");
-  const chips    = $("chips");
-  const newChatBtn = $("newChatBtn");
-  const statusText = $("statusText");
+  const ragToggleBtn = document.getElementById("ragToggleBtn");
 
-  const ragToggleBtn = $("ragToggleBtn");
-  const apiPill = $("apiPill");
-  const apiState = $("apiState");
+  const plusBtn = document.getElementById("plusBtn");
+  const plusMenu = document.getElementById("plusMenu");
+  const closePlusMenu = document.getElementById("closePlusMenu");
 
-  const plusBtn = $("plusBtn");
-  const plusMenu = $("plusMenu");
-  const closePlusMenu = $("closePlusMenu");
+  const pmAddImageFile = document.getElementById("pmAddImageFile");
+  const pmAddImageUrl = document.getElementById("pmAddImageUrl");
+  const pmAddTextFile = document.getElementById("pmAddTextFile");
+  const pmClearChat = document.getElementById("pmClearChat");
+  const pmClearKB = document.getElementById("pmClearKB");
 
-  const pmAddImageFile = $("pmAddImageFile");
-  const pmAddImageUrl  = $("pmAddImageUrl");
-  const pmAddTextFile  = $("pmAddTextFile");
-  const pmClearChat    = $("pmClearChat");
-  const pmClearKB      = $("pmClearKB");
+  const imageInput = document.getElementById("imageInput");
+  const textInput = document.getElementById("textInput");
 
-  const imageInput = $("imageInput");
-  const textInput  = $("textInput");
+  const imgModalOverlay = document.getElementById("imgModalOverlay");
+  const imgUrlInput = document.getElementById("imgUrlInput");
+  const cancelImgModal = document.getElementById("cancelImgModal");
+  const addUrlBtn = document.getElementById("addUrlBtn");
 
-  const imgModalOverlay = $("imgModalOverlay");
-  const imgUrlInput = $("imgUrlInput");
-  const cancelImgModal = $("cancelImgModal");
-  const addUrlBtn = $("addUrlBtn");
+  const kbList = document.getElementById("kbList");
+  const kbCount = document.getElementById("kbCount");
 
-  const apiModalOverlay = $("apiModalOverlay");
-  const apiKeyInput = $("apiKeyInput");
-  const modelInput = $("modelInput");
-  const apiCancel = $("apiCancel");
-  const apiClear = $("apiClear");
-  const apiSave = $("apiSave");
+  // Optional UI in your HTML (can exist): api widgets — we ignore them safely
+  const apiPill = document.getElementById("apiPill");
+  const apiState = document.getElementById("apiState");
+  const apiModalOverlay = document.getElementById("apiModalOverlay");
+  const apiKeyInput = document.getElementById("apiKeyInput");
+  const modelInput = document.getElementById("modelInput");
+  const apiCancel = document.getElementById("apiCancel");
+  const apiClear = document.getElementById("apiClear");
+  const apiSave = document.getElementById("apiSave");
 
-  const kbList = $("kbList");
-  const kbCount = $("kbCount");
-
+  /***********************
+   * State
+   ***********************/
   let ragEnabled = true;
   let busy = false;
 
@@ -60,60 +60,43 @@ Offline without API:
   let pendingImageDataUrl = null; // data:image/... base64 OR url
   let pendingImageLabel = null;
 
-  function setStatus(t){ if(statusText) statusText.textContent = t; }
+  // Auto-loaded base file path:
+  const AUTO_KB_PATH = "../data/raw/biology_basics.txt";
+  const AUTO_KB_TITLE = "biology_basics.txt";
+  const AUTO_KB_FLAG_KEY = "bioconsult_auto_kb_loaded_v1";
+
+  /***********************
+   * Helpers: UI
+   ***********************/
+  function setStatus(t) {
+    if (!statusText) return;
+    statusText.textContent = t || "";
+  }
 
   function autoResize() {
-    if(!promptEl) return;
+    if (!promptEl) return;
     promptEl.style.height = "24px";
     promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + "px";
   }
+  if (promptEl) promptEl.addEventListener("input", autoResize);
 
-  /***********************
-   * Chat render
-   ***********************/
-  function addMsg(text, who="user", sources=[]) {
-    const div = document.createElement('div');
+  function addMsg(text, who = "user") {
+    const div = document.createElement("div");
     div.className = `msg ${who}`;
     div.textContent = text;
-
-    // Note: in offline mode we do NOT pass sources, so notes are not shown.
-    if (who === "bot" && Array.isArray(sources) && sources.length) {
-      const s = document.createElement('div');
-      s.className = "sources";
-      s.textContent = "Джерела (RAG):";
-
-      sources.forEach(src => {
-        const item = document.createElement('div');
-        item.className = "src";
-
-        const t = document.createElement('div');
-        t.className = "t";
-        t.textContent = src.title || "Джерело";
-
-        const sn = document.createElement('div');
-        sn.className = "s";
-        sn.textContent = src.snippet || "";
-
-        item.appendChild(t);
-        item.appendChild(sn);
-        s.appendChild(item);
-      });
-
-      div.appendChild(s);
-    }
 
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
-  function addImagePreviewMessage({ dataUrl, caption, who="user" }){
-    const div = document.createElement('div');
+  function addImagePreviewMessage({ dataUrl, caption, who = "user" }) {
+    const div = document.createElement("div");
     div.className = `msg ${who}`;
     div.textContent = caption || "Зображення додано:";
 
-    const wrap = document.createElement('div');
+    const wrap = document.createElement("div");
     wrap.className = "imgwrap";
-    const img = document.createElement('img');
+    const img = document.createElement("img");
     img.src = dataUrl;
     img.alt = "image";
     wrap.appendChild(img);
@@ -126,54 +109,210 @@ Offline without API:
   /***********************
    * Plus menu
    ***********************/
-  function openMenu(){ plusMenu?.classList.add("open"); }
-  function closeMenu(){ plusMenu?.classList.remove("open"); }
+  function openMenu() {
+    if (plusMenu) plusMenu.classList.add("open");
+  }
+  function closeMenu() {
+    if (plusMenu) plusMenu.classList.remove("open");
+  }
+
+  if (plusBtn) {
+    plusBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      plusMenu.classList.contains("open") ? closeMenu() : openMenu();
+    });
+  }
+  if (closePlusMenu) closePlusMenu.addEventListener("click", closeMenu);
+
+  document.addEventListener("click", (e) => {
+    if (!plusMenu) return;
+    if (!plusMenu.contains(e.target) && e.target !== plusBtn) closeMenu();
+  });
+
+  if (pmAddImageFile) pmAddImageFile.addEventListener("click", () => { closeMenu(); imageInput?.click(); });
+  if (pmAddTextFile) pmAddTextFile.addEventListener("click", () => { closeMenu(); textInput?.click(); });
+  if (pmAddImageUrl) pmAddImageUrl.addEventListener("click", () => { closeMenu(); openImgModal(); });
+
+  if (pmClearChat) {
+    pmClearChat.addEventListener("click", () => {
+      closeMenu();
+      chatLog.innerHTML = "";
+      setStatus("Готово");
+    });
+  }
+
+  if (pmClearKB) {
+    pmClearKB.addEventListener("click", () => {
+      closeMenu();
+      if (!confirm("Очистити базу знань (всі матеріали)?")) return;
+      KB.clear();
+      localStorage.removeItem(AUTO_KB_FLAG_KEY);
+      RAG.rebuildIndexFromKB();
+      renderKB();
+      addMsg("Базу знань очищено ✅", "bot");
+      setStatus("Готово");
+    });
+  }
 
   /***********************
-   * Modals
+   * Image modal
    ***********************/
-  function openImgModal(){
-    imgModalOverlay?.classList.add("open");
-    imgModalOverlay?.setAttribute("aria-hidden","false");
-    if(imgUrlInput) imgUrlInput.value = "";
+  function openImgModal() {
+    if (!imgModalOverlay) return;
+    imgModalOverlay.classList.add("open");
+    imgModalOverlay.setAttribute("aria-hidden", "false");
+    if (imgUrlInput) imgUrlInput.value = "";
     setTimeout(() => imgUrlInput?.focus(), 0);
   }
-  function closeImgModal(){
-    imgModalOverlay?.classList.remove("open");
-    imgModalOverlay?.setAttribute("aria-hidden","true");
+  function closeImgModal() {
+    if (!imgModalOverlay) return;
+    imgModalOverlay.classList.remove("open");
+    imgModalOverlay.setAttribute("aria-hidden", "true");
   }
 
-  function openApiModal(){
-    apiModalOverlay?.classList.add("open");
-    apiModalOverlay?.setAttribute("aria-hidden","false");
-    if(apiKeyInput) apiKeyInput.value = Settings.getApiKey() || "";
-    if(modelInput) modelInput.value = Settings.getModel() || "gpt-4o-mini";
-    setTimeout(() => apiKeyInput?.focus(), 0);
+  if (cancelImgModal) cancelImgModal.addEventListener("click", closeImgModal);
+  if (imgModalOverlay) {
+    imgModalOverlay.addEventListener("click", (e) => {
+      if (e.target === imgModalOverlay) closeImgModal();
+    });
   }
-  function closeApiModal(){
-    apiModalOverlay?.classList.remove("open");
-    apiModalOverlay?.setAttribute("aria-hidden","true");
+
+  if (addUrlBtn) {
+    addUrlBtn.addEventListener("click", async () => {
+      const url = (imgUrlInput?.value || "").trim();
+      if (!url) return;
+
+      pendingImageDataUrl = url;
+      pendingImageLabel = "Зображення (URL)";
+      addMsg("Зображення додано ✅ Тепер задай питання про нього.", "bot");
+      closeImgModal();
+    });
   }
 
   /***********************
-   * Settings storage
+   * RAG toggle
    ***********************/
-  const Settings = {
-    kApiKey: "bioconsult_api_key",
-    kModel: "bioconsult_model",
-    getApiKey(){ return localStorage.getItem(this.kApiKey) || ""; },
-    setApiKey(v){ localStorage.setItem(this.kApiKey, v || ""); },
-    getModel(){ return localStorage.getItem(this.kModel) || ""; },
-    setModel(v){ localStorage.setItem(this.kModel, v || ""); },
-    clear(){
-      localStorage.removeItem(this.kApiKey);
-      localStorage.removeItem(this.kModel);
-    }
-  };
+  if (ragToggleBtn) {
+    ragToggleBtn.addEventListener("click", () => {
+      ragEnabled = !ragEnabled;
+      ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
+      ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
+      setStatus("Готово");
+    });
+  }
 
-  function updateApiState(){
-    const hasKey = !!Settings.getApiKey();
-    if(apiState) apiState.textContent = hasKey ? "налаштовано" : "не налаштовано";
+  /***********************
+   * Inputs
+   ***********************/
+  if (imageInput) {
+    imageInput.addEventListener("change", async () => {
+      const file = imageInput.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        addMsg("❌ Це не зображення.", "bot");
+        imageInput.value = "";
+        return;
+      }
+
+      const dataUrl = await fileToDataURL(file);
+      pendingImageDataUrl = dataUrl;
+      pendingImageLabel = file.name;
+
+      addImagePreviewMessage({ dataUrl, caption: `Зображення додано: ${file.name}`, who: "user" });
+      addMsg("Добре. Напиши питання про це зображення.", "bot");
+
+      imageInput.value = "";
+    });
+  }
+
+  if (textInput) {
+    textInput.addEventListener("change", async () => {
+      const file = textInput.files?.[0];
+      if (!file) return;
+
+      const text = await file.text();
+      KB.addDoc({ title: file.name, text });
+      RAG.rebuildIndexFromKB();
+      renderKB();
+
+      addMsg(`✅ Додано матеріал: ${file.name}`, "bot");
+      setStatus("Готово");
+
+      textInput.value = "";
+    });
+  }
+
+  /***********************
+   * Chips & new chat
+   ***********************/
+  if (chips) {
+    chips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      promptEl.value = chip.textContent.replace(/\s+/g, " ").trim();
+      promptEl.focus();
+      autoResize();
+    });
+  }
+
+  if (newChatBtn) {
+    newChatBtn.addEventListener("click", () => {
+      chatLog.innerHTML = "";
+      promptEl.value = "";
+      autoResize();
+      promptEl.focus();
+      setStatus("Готово");
+      closeMenu();
+    });
+  }
+
+  /***********************
+   * Send
+   ***********************/
+  if (sendBtn) sendBtn.addEventListener("click", send);
+  if (promptEl) {
+    promptEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+  }
+
+  async function send() {
+    const text = (promptEl.value || "").trim();
+    if (!text || busy) return;
+
+    busy = true;
+    setStatus("Думаю…");
+    if (sendBtn) sendBtn.disabled = true;
+
+    addMsg(text, "user");
+    promptEl.value = "";
+    autoResize();
+
+    try {
+      // 1) build contexts (RAG)
+      const contexts = ragEnabled ? RAG.retrieveTopK(text, 5) : [];
+
+      // 2) generate clean answer (no showing notes)
+      const answer = makeCleanAnswer(text, contexts, pendingImageDataUrl);
+
+      addMsg(answer, "bot");
+
+      // reset attachments after send
+      pendingImageDataUrl = null;
+      pendingImageLabel = null;
+
+      setStatus("Готово");
+    } catch (err) {
+      addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
+      setStatus("Помилка");
+    } finally {
+      busy = false;
+      if (sendBtn) sendBtn.disabled = false;
+    }
   }
 
   /***********************
@@ -181,14 +320,12 @@ Offline without API:
    ***********************/
   const KB = {
     key: "bioconsult_kb_docs",
-    getAll(){
+    getAll() {
       try { return JSON.parse(localStorage.getItem(this.key) || "[]"); }
       catch { return []; }
     },
-    setAll(docs){
-      localStorage.setItem(this.key, JSON.stringify(docs || []));
-    },
-    addDoc(doc){
+    setAll(docs) { localStorage.setItem(this.key, JSON.stringify(docs || [])); },
+    addDoc(doc) {
       const docs = this.getAll();
       docs.push({
         id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
@@ -198,23 +335,24 @@ Offline without API:
       });
       this.setAll(docs);
     },
-    remove(id){
+    remove(id) {
       const docs = this.getAll().filter(d => d.id !== id);
       this.setAll(docs);
     },
-    clear(){ this.setAll([]); }
+    clear() { this.setAll([]); }
   };
 
-  function renderKB(){
+  function renderKB() {
+    if (!kbCount || !kbList) return;
+
     const docs = KB.getAll();
-    if(kbCount) kbCount.textContent = `${docs.length} файлів`;
-    if(!kbList) return;
+    kbCount.textContent = `${docs.length} файлів`;
     kbList.innerHTML = "";
 
-    if(docs.length === 0){
+    if (docs.length === 0) {
       const empty = document.createElement("div");
       empty.className = "sb-item";
-      empty.textContent = "Додай .txt/.md через “+” або зачекай автозавантаження";
+      empty.textContent = "Додай .txt/.md через “+”";
       kbList.appendChild(empty);
       return;
     }
@@ -242,11 +380,11 @@ Offline without API:
       row.appendChild(del);
 
       row.addEventListener("click", () => {
-        if(!confirm(`Видалити "${d.title}" з бази?`)) return;
+        if (!confirm(`Видалити "${d.title}" з бази?`)) return;
         KB.remove(d.id);
         RAG.rebuildIndexFromKB();
         renderKB();
-        addMsg(`✅ Видалено з бази: ${d.title}`, "bot");
+        addMsg(`✅ Видалено: ${d.title}`, "bot");
       });
 
       kbList.appendChild(row);
@@ -254,17 +392,14 @@ Offline without API:
   }
 
   /***********************
-   * RAG in browser (TF-IDF-ish)
+   * RAG in browser (TF-IDF)
    ***********************/
   const RAG = (() => {
-    let chunks = [];     // {title, text, id, vec}
-    let stats = null;    // {df, N}
+    let chunks = [];  // {title, text, vec}
+    let stats = null; // {df, N}
 
     function tokenize(text) {
       return (text || "")
-        .toLowerCase()
-        .replace(/[^ -~ -￿\s]+/g, " ")
-        .replace(/[^À-￿\w\s]+/g, " ")
         .toLowerCase()
         .replace(/[^\p{L}\p{N}\s]+/gu, " ")
         .split(/\s+/)
@@ -286,22 +421,22 @@ Offline without API:
       return out;
     }
 
-    function buildVocabStats(chunks) {
+    function buildVocabStats(allChunks) {
       const df = Object.create(null);
-      for (const ch of chunks) {
+      for (const ch of allChunks) {
         const seen = new Set(tokenize(ch.text));
         for (const t of seen) df[t] = (df[t] || 0) + 1;
       }
-      return { df, N: chunks.length };
+      return { df, N: allChunks.length };
     }
 
-    function embed(text, stats) {
+    function embed(text, st) {
       const toks = tokenize(text);
       const tf = Object.create(null);
       for (const t of toks) tf[t] = (tf[t] || 0) + 1;
 
       const vec = Object.create(null);
-      const { df, N } = stats || { df:{}, N:1 };
+      const { df, N } = st || { df: {}, N: 1 };
       for (const [t, f] of Object.entries(tf)) {
         const d = df[t] || 0;
         const idf = Math.log((N + 1) / (d + 1)) + 1;
@@ -324,280 +459,257 @@ Offline without API:
       return dot / (Math.sqrt(na) * Math.sqrt(nb));
     }
 
-    function rebuildIndexFromKB(){
+    function rebuildIndexFromKB() {
       const docs = KB.getAll();
       chunks = [];
+
       for (const d of docs) {
         const parts = chunkText(d.text);
         parts.forEach((p, idx) => {
           chunks.push({ title: d.title, text: p, id: `${d.title}#${idx}` });
         });
       }
+
       stats = buildVocabStats(chunks);
       chunks.forEach(ch => ch.vec = embed(ch.text, stats));
     }
 
-    function retrieveTopK(question, k=4){
-      if(!stats || !chunks.length) return [];
+    function retrieveTopK(question, k = 5) {
+      if (!stats || !chunks.length) return [];
       const qvec = embed(question, stats);
       const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
-      scored.sort((a,b)=>b.score-a.score);
-      return scored.slice(0, k).filter(x => x.score > 0.05).map(x => x.ch);
+      scored.sort((a, b) => b.score - a.score);
+      return scored
+        .slice(0, k)
+        .filter(x => x.score > 0.06)
+        .map(x => x.ch);
     }
 
     return { rebuildIndexFromKB, retrieveTopK };
   })();
 
   /***********************
-   * Wikipedia fallback (no API keys)
+   * Clean answer generation (NO SNIPPETS)
    ***********************/
-  const Wiki = (() => {
-    const cache = new Map();
-
-    function detectLang(q){
-      const s = (q || "").toLowerCase();
-      if (/[іїєґ]/.test(s)) return "uk";
-      if (/[ёыэъ]/.test(s)) return "ru";
-      return "uk";
+  function makeCleanAnswer(question, contexts, imageUrl) {
+    // If image given, we can only do generic guidance offline:
+    if (imageUrl) {
+      return "Я бачу, що ти додав(ла) зображення. Напиши, будь ласка, що саме треба визначити (орган, клітина, процес), і я поясню, як це розпізнати та з чим пов’язано.";
     }
 
-    async function searchTitles(query, lang="uk", limit=3){
-      const url =
-        `https://${lang}.wikipedia.org/w/api.php` +
-        `?action=opensearch&search=${encodeURIComponent(query)}` +
-        `&limit=${limit}&namespace=0&format=json&origin=*`;
-      const res = await fetch(url, { cache: "no-store" });
-      if(!res.ok) throw new Error("Wiki search HTTP " + res.status);
-      const data = await res.json(); // [q, [titles], [descs], [urls]]
-      return {
-        titles: Array.isArray(data?.[1]) ? data[1] : [],
-        urls:   Array.isArray(data?.[3]) ? data[3] : []
-      };
+    if (!contexts || contexts.length === 0) {
+      return "Я не знайшов(ла) у базі знань точного пояснення для цього запиту. Спробуй уточнити: що саме потрібно — визначення, функції чи порівняння?";
     }
 
-    async function summaryByTitle(title, lang="uk"){
-      const key = `${lang}::${title}`;
-      if(cache.has(key)) return cache.get(key);
+    // Build a compact internal “idea” from contexts WITHOUT exposing them
+    const merged = contexts
+      .slice(0, 4)
+      .map(c => normalizeText(c.text))
+      .join(" ");
 
-      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-      const res = await fetch(url, { cache: "no-store" });
-      if(!res.ok) throw new Error("Wiki summary HTTP " + res.status);
-      const data = await res.json();
-      const out = {
-        title: data?.title || title,
-        extract: data?.extract || "",
-        page: data?.content_urls?.desktop?.page || ""
-      };
-      cache.set(key, out);
-      return out;
-    }
+    return buildStudyStyleAnswer(question, merged);
+  }
 
-    async function answer(query){
-      const lang = detectLang(query);
-      const found = await searchTitles(query, lang, 3);
-      if(!found.titles.length) return null;
+  function normalizeText(s) {
+    return (s || "")
+      .replace(/[*_`#>|-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
-      const bestTitle = found.titles[0];
-      const sum = await summaryByTitle(bestTitle, lang);
-      if(!sum.extract) return null;
+  function buildStudyStyleAnswer(question, sourceText) {
+    // Extract best sentences related to question tokens
+    const qTokens = keyTokens(question);
+    const sentences = splitToSentences(sourceText);
 
-      const text =
-        `${sum.extract}\n\n` +
-        (sum.page ? `Джерело: Wikipedia — ${sum.page}` : `Джерело: Wikipedia (${lang})`);
+    const ranked = sentences
+      .map(sent => ({
+        sent,
+        score: overlapScore(keyTokens(sent), qTokens)
+      }))
+      .filter(x => x.sent.length > 25)
+      .sort((a, b) => b.score - a.score);
 
-      return text;
-    }
+    const pick = ranked.slice(0, 4).map(x => x.sent);
 
-    return { answer };
-  })();
+    // If overlap low, still try first sentences
+    const chosen = pick.length ? pick : sentences.slice(0, 3);
 
-  /***********************
-   * OFFLINE Answer from contexts
-   * - does NOT show notes
-   ***********************/
-  function offlineAnswerFromContexts(question, contexts) {
-    if (!contexts || !contexts.length) return null;
+    // Build: definition + explanation + example/fact
+    const def = makeDefinitionLine(question, chosen.join(" "));
+    const expl = makeExplanation(chosen);
+    const ex = makeExampleOrFact(question, chosen.join(" "));
 
-    const qWords = (question || "")
+    // Clean final
+    return cleanOutput([def, "", expl, ex ? "" : null, ex].filter(Boolean).join("\n"));
+  }
+
+  function splitToSentences(text) {
+    const t = (text || "").replace(/\s+/g, " ").trim();
+    if (!t) return [];
+    // UA/RU punctuation support
+    return t.split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
+  }
+
+  function keyTokens(text) {
+    return (text || "")
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]+/gu, " ")
       .split(/\s+/)
-      .filter(w => w.length >= 4);
-
-    const pick = (txt, max = 5) => {
-      const clean = (txt || "")
-        .replace(/\s+/g, " ")
-        .replace(/[*_`#>-]+/g, "")
-        .trim();
-
-      const sents = clean.split(/(?<=[.!?…])\s+/).filter(Boolean);
-
-      const scored = sents.map(s => {
-        const sl = s.toLowerCase();
-        let score = 0;
-        for (const w of qWords) if (sl.includes(w)) score += 1;
-        if (sl.includes("це ") || sl.includes("— це") || sl.includes("означає")) score += 1;
-        return { s, score };
-      }).sort((a,b)=>b.score-a.score);
-
-      const out = [];
-      for (const it of scored) {
-        if (out.length >= max) break;
-        if (!it.s || it.s.length < 35) continue;
-        out.push(it.s.length > 210 ? it.s.slice(0, 210) + "…" : it.s);
-      }
-      return out;
-    };
-
-    const ideas = [];
-    contexts.slice(0,3).forEach(c => pick(c.text, 3).forEach(x => ideas.push(x)));
-
-    const uniq = [];
-    const seen = new Set();
-    for (const t of ideas) {
-      const k = t.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      uniq.push(t);
-    }
-
-    const p1 = uniq.slice(0,3).join(" ");
-    const p2 = uniq.slice(3,6).join(" ");
-    let answer = "";
-    answer += p1 ? p1 : "";
-    if (p2) answer += "\n\n" + p2;
-
-    if(!answer.trim()) return null;
-
-    answer += "\n\n(Офлайн режим: використовую твою базу знань і формую короткий виклад без показу конспектів.)";
-    return answer;
+      .filter(Boolean)
+      .filter(t => t.length >= 3)
+      .filter(t => !STOP.has(t));
   }
 
-  /***********************
-   * Seed KB from repo if empty
-   * app/index.html -> ../data/raw/biology_basics.txt
-   ***********************/
-  async function seedKBFromRepoIfEmpty() {
-    const docs = KB.getAll();
-    if (docs.length > 0) return;
+  function overlapScore(aTokens, bTokens) {
+    if (!aTokens.length || !bTokens.length) return 0;
+    const b = new Set(bTokens);
+    let hit = 0;
+    for (const t of aTokens) if (b.has(t)) hit++;
+    return hit / Math.max(5, bTokens.length);
+  }
 
-    const url = "../data/raw/biology_basics.txt";
+  function makeDefinitionLine(question, material) {
+    const q = question.trim();
+    const topic = extractTopic(q);
+
+    // Try to find a “X — це ...” pattern in material
+    const m = material.match(new RegExp(`\\b${escapeReg(topic)}\\b\\s*[—-]\\s*це\\s+([^.!?]{20,160})`, "iu"));
+    if (m && m[1]) {
+      return `**${capitalize(topic)}** — це ${m[1].trim()}.`;
+    }
+
+    // Generic definition framing
+    if (q.toLowerCase().includes("що таке") || q.toLowerCase().startsWith("що ")) {
+      return `**${capitalize(topic)}** — коротко: це поняття/процес у біології, який пояснюють так:`;
+    }
+    return `**${capitalize(topic)}**: пояснення простими словами.`;
+  }
+
+  function makeExplanation(sentences) {
+    // Convert to a structured small paragraph (no copying lots)
+    const s = sentences.slice(0, 3).map(x => shorten(x, 190));
+    // Add connectors
+    if (s.length === 1) return s[0];
+    if (s.length === 2) return `${s[0]} ${s[1]}`;
+    return `${s[0]} ${s[1]} ${s[2]}`;
+  }
+
+  function makeExampleOrFact(question, material) {
+    const q = question.toLowerCase();
+    const topic = extractTopic(question);
+
+    // If asks functions
+    if (q.includes("функц") || q.includes("для чого") || q.includes("навіщо")) {
+      return `Запам’ятай: головна роль **${capitalize(topic)}** — пов’язана з роботою клітини/організму (енергія, інформація ДНК, обмін речовин або регуляція — залежно від теми).`;
+    }
+
+    // Try to pull one short “fact-like” clause
+    const fact = (splitToSentences(material).find(s =>
+      s.toLowerCase().includes("приклад") || s.toLowerCase().includes("наприклад")
+    ) || "").replace(/^(приклад|наприклад)\s*[:—-]?\s*/i, "");
+
+    if (fact && fact.length > 25) {
+      return `Приклад: ${shorten(fact, 170)}`;
+    }
+
+    // Default helpful line
+    return `Якщо хочеш — скажи, чи тобі потрібно **визначення**, **етапи/механізм**, чи **порівняння** з іншими поняттями.`;
+  }
+
+  function shorten(s, n) {
+    const t = (s || "").trim();
+    if (t.length <= n) return t;
+    return t.slice(0, n - 1).trim() + "…";
+  }
+
+  function cleanOutput(text) {
+    // Keep bold **...** as-is, remove junk spaces
+    return (text || "")
+      .replace(/\s+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+  }
+
+  function extractTopic(q) {
+    // Very simple: take last “meaningful” word or noun-like token
+    const tokens = q
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter(t => !STOP.has(t));
+
+    if (!tokens.length) return "тема";
+    // If question like "що таке реплікація ДНК" -> take last 2 tokens if "днк" included
+    if (tokens.includes("днк") && tokens.length >= 2) {
+      const idx = tokens.lastIndexOf("днк");
+      const prev = tokens[idx - 1] || "днк";
+      return `${prev} ДНК`;
+    }
+    return tokens[tokens.length - 1];
+  }
+
+  function capitalize(s) {
+    const t = String(s || "").trim();
+    if (!t) return t;
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function escapeReg(s) {
+    return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  const STOP = new Set([
+    "що", "таке", "це", "які", "яка", "який", "як", "де", "коли", "чому", "навіщо",
+    "про", "у", "в", "на", "та", "і", "або", "але", "для", "з", "до", "від", "по",
+    "чи", "не", "є", "бути", "між", "над", "під", "через", "без", "якщо",
+    "поясни", "поясніть", "розкажи", "розкажіть"
+  ]);
+
+  /***********************
+   * Optional API UI: make it silent (no messages)
+   ***********************/
+  // We keep these listeners harmless if your HTML still has the modal.
+  if (apiPill && apiModalOverlay) {
+    apiPill.addEventListener("click", () => {
+      apiModalOverlay.classList.add("open");
+      apiModalOverlay.setAttribute("aria-hidden", "false");
+      if (apiKeyInput) apiKeyInput.value = "";
+      if (modelInput) modelInput.value = "gpt-4o-mini";
+      setTimeout(() => apiKeyInput?.focus(), 0);
+    });
+  }
+  if (apiCancel && apiModalOverlay) apiCancel.addEventListener("click", () => {
+    apiModalOverlay.classList.remove("open");
+    apiModalOverlay.setAttribute("aria-hidden", "true");
+  });
+  if (apiClear) apiClear.addEventListener("click", () => {
+    // Do nothing user-visible
     try {
-      setStatus("Завантажую твої записи…");
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Не знайдено ${url} (HTTP ${res.status})`);
-      const text = await res.text();
-
-      KB.addDoc({ title: "biology_basics.txt", text });
-      RAG.rebuildIndexFromKB();
-      renderKB();
-
-      addMsg("✅ Я підключив твої записи (biology_basics.txt) у базу знань. Можеш ставити питання.", "bot");
-      setStatus("Готово");
-    } catch (e) {
-      addMsg(
-        "⚠️ Не зміг автоматично завантажити твої записи з репо.\n" +
-        "Перевір шлях: data/raw/biology_basics.txt\n" +
-        "Помилка: " + (e?.message || String(e)),
-        "bot"
-      );
-      setStatus("Потрібні записи");
-    }
-  }
-
-  /***********************
-   * LLM call (OpenAI Responses API) if key exists
-   ***********************/
-  const LLM = (() => {
-    function buildSystem(){
-      return [
-        "Ти — BioConsult, консультант з біології.",
-        "Відповідай українською, просто і точно.",
-        "Якщо є RAG-контекст — використовуй його в першу чергу.",
-        "Якщо даних недостатньо — скажи, що саме потрібно уточнити.",
-        "Додай короткий блок 'Джерела' з позначками [#1], [#2] (тільки якщо використовував контекст)."
-      ].join("\n");
-    }
-
-    function buildContextBlock(contexts){
-      if(!contexts?.length) return "";
-      return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\n\n");
-    }
-
-    function sourcesFromContexts(contexts){
-      return (contexts || []).map(c => ({
-        title: c.title,
-        snippet: (c.text || "").slice(0, 200) + ((c.text || "").length > 200 ? "…" : "")
-      }));
-    }
-
-    function extractOutputText(data){
-      if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
-      const out = data?.output;
-      if (Array.isArray(out)) {
-        for (const item of out) {
-          const content = item?.content;
-          if (Array.isArray(content)) {
-            for (const c of content) {
-              if (c?.type === "output_text" && typeof c?.text === "string") return c.text;
-              if (c?.type === "text" && typeof c?.text === "string") return c.text;
-            }
-          }
-        }
-      }
-      return "";
-    }
-
-    async function answer({ apiKey, model, userText, contexts, image }){
-      const system = buildSystem();
-      const ctx = buildContextBlock(contexts);
-
-      const userParts = [{ type:"text", text: userText }];
-
-      if (image?.url) {
-        userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
-        userParts.push({ type:"image_url", image_url: { url: image.url } });
-      }
-
-      if (ctx) {
-        userParts.push({ type:"text", text: `\n\nКонтекст (RAG):\n${ctx}` });
-      }
-
-      const body = {
-        model: model || "gpt-4o-mini",
-        input: [
-          { role:"system", content:[{ type:"text", text: system }] },
-          { role:"user", content: userParts }
-        ]
-      };
-
-      const res = await fetch("https://api.openai.com/v1/responses", {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":"Bearer " + apiKey
-        },
-        body: JSON.stringify(body)
-      });
-
-      if(!res.ok){
-        const t = await res.text();
-        throw new Error(t || ("HTTP " + res.status));
-      }
-
-      const data = await res.json();
-      const text = extractOutputText(data) || "(порожня відповідь)";
-
-      return { answer: text, sources: sourcesFromContexts(contexts) };
-    }
-
-    return { answer };
-  })();
+      localStorage.removeItem("bioconsult_api_key");
+      localStorage.removeItem("bioconsult_model");
+    } catch {}
+    if (apiState) apiState.textContent = "не налаштовано";
+    apiModalOverlay?.classList.remove("open");
+    apiModalOverlay?.setAttribute("aria-hidden", "true");
+  });
+  if (apiSave) apiSave.addEventListener("click", () => {
+    // Save silently; still we won't mention it in chat
+    try {
+      localStorage.setItem("bioconsult_api_key", (apiKeyInput?.value || "").trim());
+      localStorage.setItem("bioconsult_model", (modelInput?.value || "gpt-4o-mini").trim());
+    } catch {}
+    if (apiState) apiState.textContent = "налаштовано";
+    apiModalOverlay?.classList.remove("open");
+    apiModalOverlay?.setAttribute("aria-hidden", "true");
+  });
 
   /***********************
    * Helpers
    ***********************/
-  function fileToDataURL(file){
+  function fileToDataURL(file) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onload = () => resolve(r.result);
@@ -606,235 +718,41 @@ Offline without API:
     });
   }
 
-  /***********************
-   * Send
-   ***********************/
-  async function send(){
-    const text = (promptEl.value || "").trim();
-    if(!text || busy) return;
+  async function autoLoadBaseKBIfNeeded() {
+    const docs = KB.getAll();
 
-    busy = true;
-    setStatus("Пишу відповідь…");
-    sendBtn.disabled = true;
+    const alreadyLoaded = localStorage.getItem(AUTO_KB_FLAG_KEY) === "1";
+    const hasFileAlready = docs.some(d => (d.title || "").toLowerCase() === AUTO_KB_TITLE.toLowerCase());
 
-    addMsg(text, "user");
-    promptEl.value = "";
-    autoResize();
+    if (hasFileAlready || alreadyLoaded) return;
 
-    try{
-      const apiKey = Settings.getApiKey();
-      const model = Settings.getModel() || "gpt-4o-mini";
+    try {
+      const res = await fetch(AUTO_KB_PATH, { cache: "no-store" });
+      if (!res.ok) return;
+      const text = await res.text();
+      if (!text || text.trim().length < 50) return;
 
-      // === OFFLINE MODE (NO API KEY) ===
-      if(!apiKey){
-        const contexts = ragEnabled ? RAG.retrieveTopK(text, 4) : [];
-        const fromNotes = offlineAnswerFromContexts(text, contexts);
-
-        if(fromNotes){
-          addMsg(fromNotes, "bot");
-          setStatus("Офлайн: відповів з твоїх матеріалів");
-          return;
-        }
-
-        // If notes didn't match -> Wikipedia
-        setStatus("Офлайн: шукаю у Wikipedia…");
-        const fromWiki = await Wiki.answer(text);
-
-        if(fromWiki){
-          addMsg(fromWiki, "bot");
-          setStatus("Офлайн: Wikipedia");
-          return;
-        }
-
-        addMsg(
-          "Я не знайшов у твоїх матеріалах достатньо інформації під це питання і не зміг підтягнути довідку.\n" +
-          "Спробуй уточнити запит або додай конспект у базу знань.",
-          "bot"
-        );
-        setStatus("Офлайн: мало даних");
-        return;
-      }
-
-      // === ONLINE MODE (WITH API KEY) ===
-      const contexts = ragEnabled ? RAG.retrieveTopK(text, 4) : [];
-      const { answer, sources } = await LLM.answer({
-        apiKey,
-        model,
-        userText: text,
-        contexts,
-        image: pendingImageDataUrl ? { url: pendingImageDataUrl, label: pendingImageLabel } : null
-      });
-
-      addMsg(answer || "Немає відповіді", "bot", sources);
-
-      // reset attachments after send
-      pendingImageDataUrl = null;
-      pendingImageLabel = null;
-
-      setStatus("Готово");
-    }catch(err){
-      addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
-      setStatus("Помилка");
-    }finally{
-      busy = false;
-      sendBtn.disabled = false;
+      KB.addDoc({ title: AUTO_KB_TITLE, text });
+      localStorage.setItem(AUTO_KB_FLAG_KEY, "1");
+    } catch {
+      // ignore
     }
-  }
-
-  /***********************
-   * Wire events
-   ***********************/
-  function wire(){
-    promptEl?.addEventListener("input", autoResize);
-
-    plusBtn?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      plusMenu.classList.contains("open") ? closeMenu() : openMenu();
-    });
-
-    closePlusMenu?.addEventListener("click", closeMenu);
-
-    document.addEventListener("click", (e) => {
-      if (plusMenu && !plusMenu.contains(e.target) && e.target !== plusBtn) closeMenu();
-    });
-
-    pmAddImageFile?.addEventListener("click", () => { closeMenu(); imageInput.click(); });
-    pmAddTextFile?.addEventListener("click", () => { closeMenu(); textInput.click(); });
-    pmAddImageUrl?.addEventListener("click", () => { closeMenu(); openImgModal(); });
-
-    pmClearChat?.addEventListener("click", () => {
-      closeMenu();
-      chatLog.innerHTML = "";
-      addMsg("Чат очищено ✅", "bot");
-      setStatus("Готово");
-    });
-
-    pmClearKB?.addEventListener("click", () => {
-      closeMenu();
-      if (!confirm("Очистити базу знань (всі матеріали)?")) return;
-      KB.clear();
-      RAG.rebuildIndexFromKB();
-      renderKB();
-      addMsg("Базу знань очищено ✅", "bot");
-      setStatus("Готово");
-    });
-
-    cancelImgModal?.addEventListener("click", closeImgModal);
-    imgModalOverlay?.addEventListener("click", (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
-
-    addUrlBtn?.addEventListener("click", async () => {
-      const url = (imgUrlInput.value || "").trim();
-      if(!url) return;
-      pendingImageDataUrl = url;
-      pendingImageLabel = "Зображення (URL)";
-      addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
-      closeImgModal();
-    });
-
-    apiPill?.addEventListener("click", openApiModal);
-    apiCancel?.addEventListener("click", closeApiModal);
-
-    apiClear?.addEventListener("click", () => {
-      Settings.clear();
-      updateApiState();
-      addMsg("API налаштування очищено.", "bot");
-      closeApiModal();
-    });
-
-    apiSave?.addEventListener("click", () => {
-      const key = (apiKeyInput.value || "").trim();
-      const model = (modelInput.value || "").trim() || "gpt-4o-mini";
-      Settings.setApiKey(key);
-      Settings.setModel(model);
-      updateApiState();
-      addMsg("✅ API налаштування збережено. Можна спілкуватись.", "bot");
-      closeApiModal();
-    });
-
-    ragToggleBtn?.addEventListener("click", () => {
-      ragEnabled = !ragEnabled;
-      ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
-      ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
-      setStatus(ragEnabled ? "RAG увімкнено" : "RAG вимкнено");
-    });
-
-    imageInput?.addEventListener("change", async () => {
-      const file = imageInput.files?.[0];
-      if(!file) return;
-
-      if(!file.type.startsWith("image/")){
-        addMsg("❌ Це не зображення.", "bot");
-        imageInput.value = "";
-        return;
-      }
-
-      const dataUrl = await fileToDataURL(file);
-      pendingImageDataUrl = dataUrl;
-      pendingImageLabel = file.name;
-
-      addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Тепер можеш написати питання про це зображення.", "bot");
-
-      imageInput.value = "";
-    });
-
-    textInput?.addEventListener("change", async () => {
-      const file = textInput.files?.[0];
-      if(!file) return;
-      const text = await file.text();
-
-      KB.addDoc({ title: file.name, text });
-      RAG.rebuildIndexFromKB();
-      renderKB();
-
-      addMsg(`✅ Додано матеріал до бази знань: ${file.name}`, "bot");
-      setStatus("Базу оновлено");
-
-      textInput.value = "";
-    });
-
-    chips?.addEventListener("click", (e) => {
-      const chip = e.target.closest(".chip");
-      if(!chip) return;
-      promptEl.value = chip.textContent.replace(/\s+/g,' ').trim() + ": ";
-      promptEl.focus();
-      autoResize();
-    });
-
-    newChatBtn?.addEventListener("click", () => {
-      chatLog.innerHTML = "";
-      promptEl.value = "";
-      autoResize();
-      promptEl.focus();
-      setStatus("Готово");
-      closeMenu();
-    });
-
-    sendBtn?.addEventListener("click", send);
-    promptEl?.addEventListener("keydown", (e) => {
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        send();
-      }
-    });
   }
 
   /***********************
    * Init
    ***********************/
-  async function init(){
-    wire();
-    updateApiState();
+  async function init() {
+    // Make API pill state quiet
+    if (apiState) apiState.textContent = "не налаштовано";
+
+    await autoLoadBaseKBIfNeeded();
+
     renderKB();
     RAG.rebuildIndexFromKB();
     autoResize();
     setStatus("Готово");
-    await seedKBFromRepoIfEmpty();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+  init();
 })();
