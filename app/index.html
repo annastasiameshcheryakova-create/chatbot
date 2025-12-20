@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BioConsult — Pastel RAG Chat</title>
+  <title>BioConsult — Pastel RAG Chat (Offline)</title>
 
   <style>
     :root{
@@ -124,11 +124,9 @@
       box-shadow:0 1px 0 rgba(0,0,0,.02);
       font-size:13px;
       color:#40574e;
-      cursor:pointer;
       white-space:nowrap;
       user-select:none;
     }
-    .pill strong{ color:var(--accent-strong); }
     .avatar{
       width:36px;height:36px;border-radius:999px;
       background:linear-gradient(135deg,#f1faf6,#ffffff);
@@ -365,7 +363,7 @@
     .pmBtn .l{ display:flex; align-items:center; gap:10px; color:#2f463d; font-size:14px; font-weight:600; }
     .pmBtn .r{ color:var(--muted); font-size:12px; }
 
-    /* Modal */
+    /* Modal (Image URL only) */
     .modalOverlay{
       position:fixed;
       inset:0;
@@ -465,18 +463,15 @@
       <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
       <div class="sb-list" id="kbList"></div>
 
-      <div class="sb-footer">🧬 Консультант з біології • RAG у браузері</div>
+      <div class="sb-footer">🧬 Консультант з біології • локальна база</div>
     </aside>
 
     <main class="main" id="main">
       <header class="topbar">
-        <!-- Кнопка налаштувань лишається, але ми не спамимо “не налаштовано” в чаті -->
-        <div class="pill" id="apiPill" title="Налаштування (необовʼязково)">
-          ⚙ LLM: <strong id="apiState">вимкнено</strong>
-        </div>
-
+        <!-- API pill removed -->
+        <div class="pill" style="cursor:default">🧬 BioConsult</div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button class="pill" id="ragToggleBtn" aria-pressed="true">🧠 RAG: увімкнено</button>
+          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 RAG: увімкнено</button>
           <div class="avatar" title="Профіль"></div>
         </div>
       </header>
@@ -487,12 +482,10 @@
             <span class="leafMark" aria-hidden="true"></span>
             <span>Привіт! Я BioConsult</span>
           </div>
-
           <h1 class="title">Навчай мене своїми матеріалами — і я відповідатиму точніше</h1>
-
           <div class="subtitle">
             Натисни “+” → додай .txt/.md (це буде база знань). Потім став запитання —
-            я знайду релевантні фрагменти та сформую відповідь.
+            я знайду релевантні фрагменти і сформую відповідь простими словами (без показу конспектів).
           </div>
         </div>
 
@@ -502,7 +495,7 @@
       <div class="composer-wrap">
         <div class="composer-area">
           <div class="composer" id="composer">
-
+            <!-- PLUS MENU -->
             <div class="plusMenu" id="plusMenu" role="menu" aria-label="Меню додавання">
               <div class="pmTitle">
                 <span>Додати</span>
@@ -519,7 +512,7 @@
                 </button>
                 <button class="pmBtn" id="pmAddTextFile" type="button">
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
-                  <div class="r">навчити RAG</div>
+                  <div class="r">в базу</div>
                 </button>
                 <button class="pmBtn" id="pmClearKB" type="button">
                   <div class="l">🧽 Очистити базу знань</div>
@@ -566,6 +559,7 @@
               <span id="statusText">Готово</span>
             </div>
 
+            <!-- hidden inputs -->
             <input id="imageInput" type="file" accept="image/*" hidden />
             <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
           </div>
@@ -577,7 +571,7 @@
   <!-- MODAL: Image URL -->
   <div class="modalOverlay" id="imgModalOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Додати зображення за URL">
-      <h3>Додати зображення з URL</h3>
+      <h3>Додати зображення з хмари (URL)</h3>
       <p>Встав пряме посилання на зображення (або публічний URL).</p>
       <div class="row">
         <input id="imgUrlInput" placeholder="https://..." />
@@ -585,31 +579,6 @@
       <div class="modalActions">
         <button class="btn" id="cancelImgModal">Скасувати</button>
         <button class="btn primary" id="addUrlBtn">Додати</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: API SETTINGS -->
-  <div class="modalOverlay" id="apiModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Налаштування LLM">
-      <h3>Налаштування LLM (необовʼязково)</h3>
-      <p>
-        Якщо хочеш — встав API key і модель. Якщо ні — бот працює локально по твоїй базі знань.
-        (Ключ зберігається локально в браузері.)
-      </p>
-
-      <div class="row">
-        <input id="apiKeyInput" placeholder="OpenAI API key (sk-...)" />
-      </div>
-
-      <div class="row">
-        <input id="modelInput" placeholder="Модель (наприклад: gpt-4o-mini)" />
-      </div>
-
-      <div class="modalActions">
-        <button class="btn" id="apiCancel">Скасувати</button>
-        <button class="btn" id="apiClear">Очистити</button>
-        <button class="btn primary" id="apiSave">Зберегти</button>
       </div>
     </div>
   </div>
@@ -626,8 +595,6 @@
     const statusText = document.getElementById('statusText');
 
     const ragToggleBtn = document.getElementById('ragToggleBtn');
-    const apiPill = document.getElementById('apiPill');
-    const apiState = document.getElementById('apiState');
 
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
@@ -647,20 +614,14 @@
     const cancelImgModal = document.getElementById('cancelImgModal');
     const addUrlBtn = document.getElementById('addUrlBtn');
 
-    const apiModalOverlay = document.getElementById('apiModalOverlay');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const modelInput = document.getElementById('modelInput');
-    const apiCancel = document.getElementById('apiCancel');
-    const apiClear = document.getElementById('apiClear');
-    const apiSave = document.getElementById('apiSave');
-
     const kbList = document.getElementById('kbList');
     const kbCount = document.getElementById('kbCount');
 
     let ragEnabled = true;
     let busy = false;
 
-    let pendingImageDataUrl = null;
+    // attachments for current message
+    let pendingImageDataUrl = null; // data:image/... base64 OR url
     let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -722,6 +683,7 @@
     pmClearChat.addEventListener('click', () => {
       closeMenu();
       chatLog.innerHTML = "";
+      addMsg("Чат очищено ✅", "bot");
       setStatus("Готово");
     });
 
@@ -731,6 +693,7 @@
       KB.clear();
       RAG.rebuildIndexFromKB();
       renderKB();
+      addMsg("Базу знань очищено ✅", "bot");
       setStatus("Готово");
     });
 
@@ -753,42 +716,11 @@
     addUrlBtn.addEventListener('click', async () => {
       const url = (imgUrlInput.value || "").trim();
       if(!url) return;
+
       pendingImageDataUrl = url;
       pendingImageLabel = "Зображення (URL)";
-      addMsg("Зображення додано. Напиши питання про нього 🙂", "bot");
+      addMsg("✅ Додано зображення з URL. Тепер задай питання про нього.", "bot");
       closeImgModal();
-    });
-
-    /***********************
-     * API modal
-     ***********************/
-    function openApiModal(){
-      apiModalOverlay.classList.add("open");
-      apiModalOverlay.setAttribute("aria-hidden","false");
-      apiKeyInput.value = Settings.getApiKey() || "";
-      modelInput.value = Settings.getModel() || "gpt-4o-mini";
-      setTimeout(() => apiKeyInput.focus(), 0);
-    }
-    function closeApiModal(){
-      apiModalOverlay.classList.remove("open");
-      apiModalOverlay.setAttribute("aria-hidden","true");
-    }
-    apiPill.addEventListener('click', openApiModal);
-    apiCancel.addEventListener('click', closeApiModal);
-
-    apiClear.addEventListener('click', () => {
-      Settings.clear();
-      updateApiState();
-      closeApiModal();
-    });
-
-    apiSave.addEventListener('click', () => {
-      const key = (apiKeyInput.value || "").trim();
-      const model = (modelInput.value || "").trim() || "gpt-4o-mini";
-      Settings.setApiKey(key);
-      Settings.setModel(model);
-      updateApiState();
-      closeApiModal();
     });
 
     /***********************
@@ -798,7 +730,7 @@
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
       ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
-      setStatus(ragEnabled ? "RAG увімкнено" : "RAG вимкнено");
+      setStatus("Готово");
     });
 
     /***********************
@@ -809,7 +741,7 @@
       if(!file) return;
 
       if(!file.type.startsWith("image/")){
-        addMsg("Це не зображення.", "bot");
+        addMsg("❌ Це не зображення.", "bot");
         imageInput.value = "";
         return;
       }
@@ -819,7 +751,7 @@
       pendingImageLabel = file.name;
 
       addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Ок. Напиши питання про зображення 🙂", "bot");
+      addMsg("Тепер можеш написати питання про це зображення.", "bot");
 
       imageInput.value = "";
     });
@@ -833,8 +765,8 @@
       RAG.rebuildIndexFromKB();
       renderKB();
 
-      addMsg(`Додано в базу: ${file.name}`, "bot");
-      setStatus("Базу оновлено");
+      addMsg(`✅ Додано матеріал до бази знань: ${file.name}`, "bot");
+      setStatus("Готово");
 
       textInput.value = "";
     });
@@ -860,7 +792,7 @@
     });
 
     /***********************
-     * Send
+     * Send (OFFLINE ONLY)
      ***********************/
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
@@ -875,7 +807,7 @@
       if(!text || busy) return;
 
       busy = true;
-      setStatus("Думаю…");
+      setStatus("Пишу відповідь…");
       sendBtn.disabled = true;
 
       addMsg(text, "user");
@@ -883,61 +815,24 @@
       autoResize();
 
       try{
-        const apiKey = Settings.getApiKey();
-        const model = Settings.getModel() || "gpt-4o-mini";
         const contexts = ragEnabled ? RAG.retrieveTopK(text, 4) : [];
+        const offline = offlineAnswerFromContexts(text, contexts);
 
-        // Без ключа — офлайн відповіді “нормальним текстом”, без показу конспектів
-        if(!apiKey){
-          const offline = offlineAnswerFromContexts(text, contexts);
-          addMsg(offline, "bot");
-          setStatus("Готово");
-          return;
-        }
+        // IMPORTANT: no sources => no showing notes
+        addMsg(offline, "bot");
 
-        // З ключем — відповідає LLM (показ джерел можна додати, але ти просила НЕ показувати записи — тому тут теж не рендеримо sources)
-        const { answer } = await LLM.answer({
-          apiKey,
-          model,
-          userText: text,
-          contexts,
-          image: pendingImageDataUrl ? { url: pendingImageDataUrl, label: pendingImageLabel } : null
-        });
-
-        addMsg(answer || "Немає відповіді", "bot");
-
+        // reset attachments after send (just in case)
         pendingImageDataUrl = null;
         pendingImageLabel = null;
 
         setStatus("Готово");
       }catch(err){
-        addMsg("Помилка: " + (err?.message || String(err)), "bot");
+        addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
         setStatus("Помилка");
       }finally{
         busy = false;
         sendBtn.disabled = false;
       }
-    }
-
-    /***********************
-     * Settings storage
-     ***********************/
-    const Settings = {
-      kApiKey: "bioconsult_api_key",
-      kModel: "bioconsult_model",
-      getApiKey(){ return localStorage.getItem(this.kApiKey) || ""; },
-      setApiKey(v){ localStorage.setItem(this.kApiKey, v || ""); },
-      getModel(){ return localStorage.getItem(this.kModel) || ""; },
-      setModel(v){ localStorage.setItem(this.kModel, v || ""); },
-      clear(){
-        localStorage.removeItem(this.kApiKey);
-        localStorage.removeItem(this.kModel);
-      }
-    };
-
-    function updateApiState(){
-      const hasKey = !!Settings.getApiKey();
-      apiState.textContent = hasKey ? "увімкнено" : "вимкнено";
     }
 
     /***********************
@@ -977,7 +872,7 @@
       if(docs.length === 0){
         const empty = document.createElement("div");
         empty.className = "sb-item";
-        empty.textContent = "Додай .txt/.md через “+” або зачекай автозавантаження";
+        empty.textContent = "Додай .txt/.md через “+” або автозавантаження";
         kbList.appendChild(empty);
         return;
       }
@@ -1009,6 +904,7 @@
           KB.remove(d.id);
           RAG.rebuildIndexFromKB();
           renderKB();
+          addMsg(`✅ Видалено з бази: ${d.title}`, "bot");
         });
 
         kbList.appendChild(row);
@@ -1019,8 +915,8 @@
      * RAG in browser (TF-IDF-ish)
      ***********************/
     const RAG = (() => {
-      let chunks = [];
-      let stats = null;
+      let chunks = [];     // {title, text, id, vec}
+      let stats = null;    // {df, N}
 
       function tokenize(text) {
         return (text || "")
@@ -1107,74 +1003,187 @@
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
-    /***********************
-     * OFFLINE Answer (без API)
-     * - використовує RAG.retrieveTopK()
-     * - НЕ показує фрагменти конспектів
-     * - формує зв’язний текст
-     ***********************/
+    // ===============================
+    // OFFLINE Answer v2 (без API)
+    // - генерує зв’язний текст
+    // - НЕ показує конспект (без цитат)
+    // ===============================
     function offlineAnswerFromContexts(question, contexts) {
-      if (!contexts || !contexts.length) {
-        return (
-          "Я не знайшов у базі знань достатньо матеріалу під це питання.\n" +
-          "Спробуй уточнити запит або додай конспект/тему у базу (.txt/.md)."
-        );
+      const q = (question || "").trim();
+      if (!q) return "Напиши запитання 🙂";
+
+      if (!Array.isArray(contexts) || contexts.length === 0) {
+        return "У твоїх матеріалах я не знайшов(ла) інформації під це питання. Спробуй уточнити запит або додай конспект по темі.";
       }
 
-      const qWords = (question || "")
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-        .split(/\s+/)
-        .filter(w => w.length >= 4);
-
-      function scoreSentence(s){
-        const sl = s.toLowerCase();
-        let score = 0;
-        for (const w of qWords) if (sl.includes(w)) score += 2;
-        if (sl.includes("— це") || sl.includes("це ") || sl.includes("означає")) score += 1;
-        score += Math.min(2, Math.floor(s.length / 90));
-        return score;
+      const facts = extractFactsFromContexts(q, contexts);
+      if (!facts.ok) {
+        return "У твоїх матеріалах зараз недостатньо точних фактів для відповіді. Додай нотатки саме про цю тему або задай питання конкретніше (що саме треба: визначення, функції, відмінності, етапи?).";
       }
 
-      function cleanText(t){
-        return (t || "")
-          .replace(/\s+/g, " ")
-          .replace(/[*_`#>-]+/g, "")
-          .trim();
+      const intent = detectIntent(q);
+      return composeAnswer(q, intent, facts);
+    }
+
+    function detectIntent(q) {
+      const s = normalizeText(q);
+      if (/(різниц|відрізня|vs|порівня)/i.test(s)) return "compare";
+      if (/(етап|стад|фаз|крок|процес|як відбува)/i.test(s)) return "process";
+      if (/(функц|роль|для чого|навіщо)/i.test(s)) return "function";
+      if (/(що таке|визнач|поясни|означає)/i.test(s)) return "define";
+      return "general";
+    }
+
+    function extractFactsFromContexts(question, contexts) {
+      const qTokens = keyTokens(question);
+
+      const candidates = [];
+      for (const c of contexts.slice(0, 4)) {
+        const txt = String(c?.text || "");
+        const sentences = splitSentences(cleanMarkup(txt));
+
+        for (const sent of sentences) {
+          const s = sent.trim();
+          if (s.length < 25) continue;
+          const score = scoreSentence(s, qTokens);
+          if (score >= 2 && looksLikeFact(s)) {
+            candidates.push({ s, score });
+          }
+        }
       }
 
-      const pool = [];
-      contexts.slice(0, 4).forEach(c => {
-        const clean = cleanText(c.text);
-        const sents = clean.split(/(?<=[.!?…])\s+/).map(x=>x.trim()).filter(Boolean);
-        sents.forEach(s => {
-          if (s.length < 30 || s.length > 260) return;
-          pool.push({ s, score: scoreSentence(s) });
-        });
-      });
+      candidates.sort((a, b) => b.score - a.score);
 
-      pool.sort((a,b)=>b.score-a.score);
-
-      const picked = [];
+      const uniq = [];
       const seen = new Set();
-      for (const it of pool) {
-        const k = it.s.toLowerCase();
+      for (const it of candidates) {
+        const k = normalizeText(it.s).slice(0, 180);
         if (seen.has(k)) continue;
         seen.add(k);
-        picked.push(it.s);
-        if (picked.length >= 6) break;
+        uniq.push(it.s);
+        if (uniq.length >= 10) break;
       }
 
-      const intro = `Ось пояснення за запитом “${question}”:`;
-      const p1 = picked.slice(0,3).join(" ");
-      const p2 = picked.slice(3,6).join(" ");
+      if (uniq.length < 2) return { ok: false, bullets: [] };
 
-      return [intro, "", p1, p2 ? ("\n\n" + p2) : ""].join("\n").trim();
+      const bullets = uniq.map(s => compressSentence(s)).filter(Boolean).slice(0, 8);
+      return { ok: bullets.length >= 2, bullets };
+    }
+
+    function scoreSentence(sentence, qTokens) {
+      const s = normalizeText(sentence);
+      let score = 0;
+      for (const t of qTokens) if (s.includes(t)) score += 1;
+      if (/(— це|це |назива|означа|визнача)/i.test(sentence)) score += 1;
+      if (/(склада|містить|характер|відбува|потрібн|забезпеч)/i.test(sentence)) score += 1;
+      return score;
+    }
+
+    function looksLikeFact(s) {
+      if (/(я думаю|можливо|ймовірно|напевно)/i.test(s)) return false;
+      return /[A-Za-zА-Яа-яІЇЄҐієїґ]/.test(s);
+    }
+
+    function composeAnswer(question, intent, facts) {
+      const bullets = facts.bullets;
+
+      const intro = makeIntro(question, intent);
+      const core = buildCoreParagraph(intent, bullets);
+      const extra = intent === "compare"
+        ? buildCompareBlock(bullets)
+        : (intent === "process" ? buildProcessBlock(bullets) : "");
+      const outro = makeOutro(intent);
+
+      return [intro, core, extra, outro].filter(Boolean).join("\n\n");
+    }
+
+    function makeIntro(q, intent) {
+      if (intent === "compare") return `Поясню різницю за твоїми матеріалами:`;
+      if (intent === "process") return `Ось як це відбувається (за твоїми матеріалами):`;
+      if (intent === "function") return `Ось основні функції/роль (за твоїми матеріалами):`;
+      if (intent === "define") return `Коротке пояснення (за твоїми матеріалами):`;
+      return `Ось відповідь за твоїми матеріалами:`;
+    }
+
+    function buildCoreParagraph(intent, bullets) {
+      const pick = bullets.slice(0, 4).map(b => rewriteSoft(b));
+      return pick.join(" ");
+    }
+
+    function buildCompareBlock(bullets) {
+      const items = bullets.slice(0, 6).map(b => rewriteSoft(b));
+      const best = items.slice(0, 3);
+      return "Відмінності (коротко):\n- " + best.join("\n- ");
+    }
+
+    function buildProcessBlock(bullets) {
+      const steps = bullets.slice(0, 5).map((b, i) => `${i + 1}) ${rewriteSoft(b)}`);
+      return "Послідовність (коротко):\n" + steps.join("\n");
+    }
+
+    function makeOutro(intent) {
+      if (intent === "compare") return "Якщо хочеш — напиши, які саме 2 поняття порівняти, і я зроблю чіткіше.";
+      if (intent === "process") return "Якщо треба — скажи, для якого класу/рівня, і я спрощу або ускладню.";
+      return "Якщо хочеш — додай тему/конспект, і відповіді стануть ще точніші.";
+    }
+
+    function rewriteSoft(s) {
+      let t = String(s || "").trim();
+      t = t.replace(/\s+/g, " ");
+      t = t.replace(/^\W+|\W+$/g, "");
+
+      const replacements = [
+        [/\bце\b/gi, "це явище"],
+        [/\bзабезпечує\b/gi, "допомагає забезпечити"],
+        [/\bвідбувається\b/gi, "проходить"],
+        [/\bвикористовується\b/gi, "застосовується"],
+      ];
+      for (const [a, b] of replacements) t = t.replace(a, b);
+
+      if (t.length > 230) t = t.slice(0, 230).trim() + "…";
+      return t;
+    }
+
+    function normalizeText(s) {
+      return String(s || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function keyTokens(s) {
+      const stop = new Set(["який","яка","яке","що","таке","це","про","для","коли","як","та","або","чи","у","в","на","до","з","із","ми","ви","вони"]);
+      return normalizeText(s)
+        .split(" ")
+        .filter(w => w.length >= 4 && !stop.has(w))
+        .slice(0, 12);
+    }
+
+    function cleanMarkup(s) {
+      return String(s || "")
+        .replace(/[*_`#>-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function splitSentences(text) {
+      const t = String(text || "").trim();
+      if (!t) return [];
+      return t.split(/(?<=[.!?…])\s+/);
+    }
+
+    function compressSentence(s) {
+      let t = String(s || "").replace(/\([^)]*\)/g, "").trim();
+      t = t.replace(/\s+/g, " ");
+      if (t.length < 25) return "";
+      if (t.length > 260) t = t.slice(0, 260).trim() + "…";
+      return t;
     }
 
     /***********************
-     * Seed KB from repo (GitHub Pages)
-     * шлях: ../data/raw/biology_basics.txt
+     * Seed KB from repo (optional)
+     * app/index.html -> ../data/raw/biology_basics.txt
      ***********************/
     async function seedKBFromRepoIfEmpty() {
       const docs = KB.getAll();
@@ -1182,7 +1191,7 @@
 
       const url = "../data/raw/biology_basics.txt";
       try {
-        setStatus("Завантажую базу…");
+        setStatus("Завантажую твої записи…");
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("Не вдалося завантажити " + url + " (HTTP " + res.status + ")");
         const text = await res.text();
@@ -1191,11 +1200,11 @@
         RAG.rebuildIndexFromKB();
         renderKB();
 
-        addMsg("Базу знань підключено. Можеш ставити питання 🙂", "bot");
+        addMsg("✅ Підключив твої записи у базу знань. Можеш ставити питання.", "bot");
         setStatus("Готово");
       } catch (e) {
         addMsg(
-          "Не зміг автоматично завантажити файл бази з репо.\n" +
+          "⚠️ Не зміг автоматично завантажити твої записи з репо.\n" +
           "Перевір, що файл існує: data/raw/biology_basics.txt\n" +
           "Помилка: " + (e?.message || String(e)),
           "bot"
@@ -1203,85 +1212,6 @@
         setStatus("Готово");
       }
     }
-
-    /***********************
-     * LLM call (OpenAI Responses API) — optional
-     ***********************/
-    const LLM = (() => {
-      function buildSystem(){
-        return [
-          "Ти — BioConsult, консультант з біології.",
-          "Відповідай українською, просто і точно.",
-          "Використовуй контекст, але НЕ цитуй дослівно великі фрагменти."
-        ].join("\n");
-      }
-
-      function buildContextBlock(contexts){
-        if(!contexts?.length) return "";
-        return contexts.map((c, i) => `[#${i+1} ${c.title}] ${c.text}`).join("\n\n");
-      }
-
-      function extractOutputText(data){
-        if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
-
-        const out = data?.output;
-        if (Array.isArray(out)) {
-          for (const item of out) {
-            const content = item?.content;
-            if (Array.isArray(content)) {
-              for (const c of content) {
-                if (c?.type === "output_text" && typeof c?.text === "string") return c.text;
-                if (c?.type === "text" && typeof c?.text === "string") return c.text;
-              }
-            }
-          }
-        }
-        return "";
-      }
-
-      async function answer({ apiKey, model, userText, contexts, image }){
-        const system = buildSystem();
-        const ctx = buildContextBlock(contexts);
-
-        const userParts = [];
-        userParts.push({ type:"text", text: userText });
-
-        if (image?.url) {
-          userParts.push({ type:"text", text: `\n(Додано зображення: ${image.label || "image"})\n` });
-          userParts.push({ type:"image_url", image_url: { url: image.url } });
-        }
-
-        if (ctx) userParts.push({ type:"text", text: `\n\nКонтекст:\n${ctx}` });
-
-        const body = {
-          model: model || "gpt-4o-mini",
-          input: [
-            { role:"system", content:[{ type:"text", text: system }] },
-            { role:"user", content: userParts }
-          ]
-        };
-
-        const res = await fetch("https://api.openai.com/v1/responses", {
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json",
-            "Authorization":"Bearer " + apiKey
-          },
-          body: JSON.stringify(body)
-        });
-
-        if(!res.ok){
-          const t = await res.text();
-          throw new Error(t || ("HTTP " + res.status));
-        }
-
-        const data = await res.json();
-        const text = extractOutputText(data) || "";
-        return { answer: text };
-      }
-
-      return { answer };
-    })();
 
     /***********************
      * Helpers
@@ -1299,7 +1229,6 @@
      * Init
      ***********************/
     async function init(){
-      updateApiState();
       renderKB();
       RAG.rebuildIndexFromKB();
       autoResize();
