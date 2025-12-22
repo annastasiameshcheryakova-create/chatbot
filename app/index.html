@@ -468,7 +468,6 @@
 
     <main class="main" id="main">
       <header class="topbar">
-        <!-- API pill removed -->
         <div class="pill" style="cursor:default">🧬 BioConsult</div>
         <div style="display:flex; align-items:center; gap:10px;">
           <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 RAG: увімкнено</button>
@@ -620,8 +619,8 @@
     let ragEnabled = true;
     let busy = false;
 
-    // attachments for current message
-    let pendingImageDataUrl = null; // data:image/... base64 OR url
+    // attachments (поки тільки для прев’ю)
+    let pendingImageDataUrl = null;
     let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -818,10 +817,10 @@
         const contexts = ragEnabled ? RAG.retrieveTopK(text, 4) : [];
         const offline = offlineAnswerFromContexts(text, contexts);
 
-        // IMPORTANT: no sources => no showing notes
+        // без sources => не показуємо конспекти
         addMsg(offline, "bot");
 
-        // reset attachments after send (just in case)
+        // reset attachments (просто на майбутнє)
         pendingImageDataUrl = null;
         pendingImageLabel = null;
 
@@ -1003,148 +1002,128 @@
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
-    // ===============================
-    // OFFLINE Answer v2 (без API)
-    // - генерує зв’язний текст
-    // - НЕ показує конспект (без цитат)
-    // ===============================
+    // ==========================================================
+    // OFFLINE Answer (заміна твоєї старої логіки)
+    // - пише зв'язно
+    // - НЕ копіює конспект дослівно
+    // - НЕ показує фрагменти конспектів
+    // ==========================================================
     function offlineAnswerFromContexts(question, contexts) {
       const q = (question || "").trim();
       if (!q) return "Напиши запитання 🙂";
 
       if (!Array.isArray(contexts) || contexts.length === 0) {
-        return "У твоїх матеріалах я не знайшов(ла) інформації під це питання. Спробуй уточнити запит або додай конспект по темі.";
-      }
-
-      const facts = extractFactsFromContexts(q, contexts);
-      if (!facts.ok) {
-        return "У твоїх матеріалах зараз недостатньо точних фактів для відповіді. Додай нотатки саме про цю тему або задай питання конкретніше (що саме треба: визначення, функції, відмінності, етапи?).";
+        return (
+          "У твоїх матеріалах я не знайшов(ла) достатньо інформації під це питання.\n\n" +
+          "Спробуй:\n" +
+          "• уточнити запит (додай ключові слова)\n" +
+          "• додати конспект по темі через “+”"
+        );
       }
 
       const intent = detectIntent(q);
-      return composeAnswer(q, intent, facts);
+      const facts = extractFacts(q, contexts);
+
+      if (facts.length < 2) {
+        return (
+          "Я бачу, що тема десь є, але в твоїх матеріалах не вистачає чітких фактів саме для цього формулювання.\n\n" +
+          "Напиши, що саме треба: визначення / функції / етапи / порівняння — і я відповім точніше."
+        );
+      }
+
+      return composeAnswer(intent, facts);
     }
 
     function detectIntent(q) {
-      const s = normalizeText(q);
-      if (/(різниц|відрізня|vs|порівня)/i.test(s)) return "compare";
-      if (/(етап|стад|фаз|крок|процес|як відбува)/i.test(s)) return "process";
-      if (/(функц|роль|для чого|навіщо)/i.test(s)) return "function";
-      if (/(що таке|визнач|поясни|означає)/i.test(s)) return "define";
+      const s = norm(q);
+      if (/(різниц|відрізня|vs|порівня)/.test(s)) return "compare";
+      if (/(етап|стад|фаз|крок|процес|як відбува|механізм)/.test(s)) return "process";
+      if (/(функц|роль|для чого|навіщо)/.test(s)) return "function";
+      if (/(що таке|визнач|поясни|означає)/.test(s)) return "define";
       return "general";
     }
 
-    function extractFactsFromContexts(question, contexts) {
-      const qTokens = keyTokens(question);
+    // витягуємо "факти" як перефразовані тези
+    function extractFacts(question, contexts) {
+      const tokens = keyTokens(question);
+      const sents = [];
 
-      const candidates = [];
       for (const c of contexts.slice(0, 4)) {
-        const txt = String(c?.text || "");
-        const sentences = splitSentences(cleanMarkup(txt));
+        const clean = stripMarkup(String(c?.text || ""));
+        for (const sent of splitSentences(clean)) {
+          const t = sent.trim();
+          if (t.length < 35) continue;
 
-        for (const sent of sentences) {
-          const s = sent.trim();
-          if (s.length < 25) continue;
-          const score = scoreSentence(s, qTokens);
-          if (score >= 2 && looksLikeFact(s)) {
-            candidates.push({ s, score });
-          }
+          const sc = score(t, tokens);
+          if (sc < 2) continue;
+
+          // відкидаємо дуже “схожі на конспект” уривки (списки, підряд заголовки)
+          if (/^\s*[-•\d]+\s+/.test(t)) continue;
+          sents.push({ t, sc });
         }
       }
 
-      candidates.sort((a, b) => b.score - a.score);
+      sents.sort((a,b)=>b.sc-a.sc);
 
-      const uniq = [];
+      const out = [];
       const seen = new Set();
-      for (const it of candidates) {
-        const k = normalizeText(it.s).slice(0, 180);
+      for (const it of sents) {
+        const k = norm(it.t).slice(0, 160);
         if (seen.has(k)) continue;
         seen.add(k);
-        uniq.push(it.s);
-        if (uniq.length >= 10) break;
+
+        const paraphrased = softRewrite(it.t);
+        if (paraphrased.length < 25) continue;
+
+        out.push(paraphrased);
+        if (out.length >= 8) break;
+      }
+      return out;
+    }
+
+    function composeAnswer(intent, facts) {
+      const intro =
+        intent === "compare" ? "Поясню різницю коротко й зрозуміло:" :
+        intent === "process" ? "Ось як це працює (коротко і по суті):" :
+        intent === "function" ? "Ось головна роль/функції:" :
+        intent === "define" ? "Пояснення простими словами:" :
+        "Ось відповідь простими словами:";
+
+      const p1 = facts.slice(0, 3).join(" ");
+      const p2 = facts.slice(3, 6).join(" ");
+
+      let extra = "";
+      if (intent === "compare") {
+        const items = facts.slice(0, 3).map(x => `- ${x}`).join("\n");
+        extra = "\n\nВідмінності (коротко):\n" + items;
+      } else if (intent === "process") {
+        const steps = facts.slice(0, 4).map((x,i)=>`${i+1}) ${x}`).join("\n");
+        extra = "\n\nПослідовність:\n" + steps;
       }
 
-      if (uniq.length < 2) return { ok: false, bullets: [] };
+      const outro =
+        intent === "compare" ? "Якщо скажеш, що саме порівнюємо (2 терміни), я зроблю ще точніше." :
+        intent === "process" ? "Хочеш — розпишу детальніше по кроках і з прикладом." :
+        "Якщо скажеш рівень (7–9 / 10–11 / НМТ), я підлаштую складність.";
 
-      const bullets = uniq.map(s => compressSentence(s)).filter(Boolean).slice(0, 8);
-      return { ok: bullets.length >= 2, bullets };
+      return [intro, p1, p2, extra, outro].filter(Boolean).join("\n\n");
     }
 
-    function scoreSentence(sentence, qTokens) {
-      const s = normalizeText(sentence);
-      let score = 0;
-      for (const t of qTokens) if (s.includes(t)) score += 1;
-      if (/(— це|це |назива|означа|визнача)/i.test(sentence)) score += 1;
-      if (/(склада|містить|характер|відбува|потрібн|забезпеч)/i.test(sentence)) score += 1;
-      return score;
+    function score(sentence, tokens) {
+      const s = norm(sentence);
+      let sc = 0;
+      for (const t of tokens) if (s.includes(t)) sc += 1;
+      if (/(— це|це |назива|означа|визнача)/.test(s)) sc += 1;
+      if (/(склада|містить|характер|відбува|потрібн|забезпеч|вплива)/.test(s)) sc += 1;
+      return sc;
     }
 
-    function looksLikeFact(s) {
-      if (/(я думаю|можливо|ймовірно|напевно)/i.test(s)) return false;
-      return /[A-Za-zА-Яа-яІЇЄҐієїґ]/.test(s);
+    function keyTokens(s) {
+      const stop = new Set(["який","яка","яке","що","таке","це","про","для","коли","як","та","або","чи","у","в","на","до","з","із","ми","ви","вони"]);
+      return norm(s).split(" ").filter(w => w.length >= 4 && !stop.has(w)).slice(0, 12);
     }
 
-    function composeAnswer(question, intent, facts) {
-      const bullets = facts.bullets;
-
-      const intro = makeIntro(question, intent);
-      const core = buildCoreParagraph(intent, bullets);
-      const extra = intent === "compare"
-        ? buildCompareBlock(bullets)
-        : (intent === "process" ? buildProcessBlock(bullets) : "");
-      const outro = makeOutro(intent);
-
-      return [intro, core, extra, outro].filter(Boolean).join("\n\n");
-    }
-
-    function makeIntro(q, intent) {
-      if (intent === "compare") return `Поясню різницю за твоїми матеріалами:`;
-      if (intent === "process") return `Ось як це відбувається (за твоїми матеріалами):`;
-      if (intent === "function") return `Ось основні функції/роль (за твоїми матеріалами):`;
-      if (intent === "define") return `Коротке пояснення (за твоїми матеріалами):`;
-      return `Ось відповідь за твоїми матеріалами:`;
-    }
-
-    function buildCoreParagraph(intent, bullets) {
-      const pick = bullets.slice(0, 4).map(b => rewriteSoft(b));
-      return pick.join(" ");
-    }
-
-    function buildCompareBlock(bullets) {
-      const items = bullets.slice(0, 6).map(b => rewriteSoft(b));
-      const best = items.slice(0, 3);
-      return "Відмінності (коротко):\n- " + best.join("\n- ");
-    }
-
-    function buildProcessBlock(bullets) {
-      const steps = bullets.slice(0, 5).map((b, i) => `${i + 1}) ${rewriteSoft(b)}`);
-      return "Послідовність (коротко):\n" + steps.join("\n");
-    }
-
-    function makeOutro(intent) {
-      if (intent === "compare") return "Якщо хочеш — напиши, які саме 2 поняття порівняти, і я зроблю чіткіше.";
-      if (intent === "process") return "Якщо треба — скажи, для якого класу/рівня, і я спрощу або ускладню.";
-      return "Якщо хочеш — додай тему/конспект, і відповіді стануть ще точніші.";
-    }
-
-    function rewriteSoft(s) {
-      let t = String(s || "").trim();
-      t = t.replace(/\s+/g, " ");
-      t = t.replace(/^\W+|\W+$/g, "");
-
-      const replacements = [
-        [/\bце\b/gi, "це явище"],
-        [/\bзабезпечує\b/gi, "допомагає забезпечити"],
-        [/\bвідбувається\b/gi, "проходить"],
-        [/\bвикористовується\b/gi, "застосовується"],
-      ];
-      for (const [a, b] of replacements) t = t.replace(a, b);
-
-      if (t.length > 230) t = t.slice(0, 230).trim() + "…";
-      return t;
-    }
-
-    function normalizeText(s) {
+    function norm(s) {
       return String(s || "")
         .toLowerCase()
         .replace(/[^\p{L}\p{N}\s]+/gu, " ")
@@ -1152,15 +1131,7 @@
         .trim();
     }
 
-    function keyTokens(s) {
-      const stop = new Set(["який","яка","яке","що","таке","це","про","для","коли","як","та","або","чи","у","в","на","до","з","із","ми","ви","вони"]);
-      return normalizeText(s)
-        .split(" ")
-        .filter(w => w.length >= 4 && !stop.has(w))
-        .slice(0, 12);
-    }
-
-    function cleanMarkup(s) {
+    function stripMarkup(s) {
       return String(s || "")
         .replace(/[*_`#>-]+/g, " ")
         .replace(/\s+/g, " ")
@@ -1170,14 +1141,26 @@
     function splitSentences(text) {
       const t = String(text || "").trim();
       if (!t) return [];
-      return t.split(/(?<=[.!?…])\s+/);
+      return t.split(/(?<=[.!?…])\s+/).map(x=>x.trim()).filter(Boolean);
     }
 
-    function compressSentence(s) {
-      let t = String(s || "").replace(/\([^)]*\)/g, "").trim();
-      t = t.replace(/\s+/g, " ");
-      if (t.length < 25) return "";
-      if (t.length > 260) t = t.slice(0, 260).trim() + "…";
+    // м'який “перефраз”, щоб не копіювати дослівно
+    function softRewrite(s) {
+      let t = String(s || "").trim().replace(/\s+/g, " ");
+      t = t.replace(/\([^)]*\)/g, "").trim();
+
+      const reps = [
+        [/\bце\b/gi, "це явище"],
+        [/\bвідбувається\b/gi, "проходить"],
+        [/\bзабезпечує\b/gi, "допомагає забезпечити"],
+        [/\bвикористовується\b/gi, "застосовується"],
+        [/\bназивають\b/gi, "часто називають"],
+        [/\bозначає\b/gi, "має значення"],
+      ];
+      for (const [a,b] of reps) t = t.replace(a,b);
+
+      // обрізаємо, щоб не було “цитати”
+      if (t.length > 220) t = t.slice(0, 220).trim() + "…";
       return t;
     }
 
@@ -1204,8 +1187,9 @@
         setStatus("Готово");
       } catch (e) {
         addMsg(
-          "⚠️ Не зміг автоматично завантажити твої записи з репо.\n" +
-          "Перевір, що файл існує: data/raw/biology_basics.txt\n" +
+          "⚠️ Автозавантаження не спрацювало.\n" +
+          "Якщо ти відкриваєш файл подвійним кліком (file://), браузер може блокувати fetch.\n" +
+          "Рішення: запусти через GitHub Pages або локальний сервер.\n\n" +
           "Помилка: " + (e?.message || String(e)),
           "bot"
         );
@@ -1239,3 +1223,4 @@
   </script>
 </body>
 </html>
+
