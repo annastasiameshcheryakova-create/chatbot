@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BioConsult — Pastel RAG Chat (Offline)</title>
+  <title>BioConsult — Pastel RAG Chat</title>
 
   <style>
     :root{
@@ -35,7 +35,6 @@
 
     .app{ height:100dvh; display:grid; grid-template-columns: 320px 1fr; }
 
-    /* Sidebar */
     .sidebar{
       background:rgba(255,255,255,.65);
       backdrop-filter: blur(14px);
@@ -102,7 +101,6 @@
       display:flex;align-items:center;gap:8px;
     }
 
-    /* Main */
     .main{ position:relative; display:flex; flex-direction:column; min-width:0; }
     .topbar{
       height:64px;
@@ -175,7 +173,6 @@
       line-height:1.45;
     }
 
-    /* Chat */
     .chatlog{
       width:min(900px, 100%);
       margin-top:14px;
@@ -205,20 +202,6 @@
     }
     .msg.bot{ align-self:flex-start; }
 
-    .msg .imgwrap{
-      margin-top:10px;
-      border-radius:14px;
-      overflow:hidden;
-      border:1px solid var(--line);
-      background:#fff;
-    }
-    .msg img{
-      display:block;
-      max-width:100%;
-      height:auto;
-    }
-
-    /* Composer */
     .composer-wrap{
       position:absolute;
       left:0; right:0; bottom:0;
@@ -319,115 +302,10 @@
       flex-wrap:wrap;
     }
 
-    /* Plus menu */
-    .plusMenu{
-      position:absolute;
-      left:12px;
-      bottom:92px;
-      width:340px;
-      border-radius:16px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.92);
-      backdrop-filter: blur(14px);
-      box-shadow: var(--shadow);
-      padding:10px;
-      display:none;
-      z-index:50;
-    }
-    .plusMenu.open{ display:block; }
-
-    .pmTitle{
-      font-size:12px;
-      color:var(--muted);
-      padding:6px 8px 10px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-    }
-    .pmGrid{ display:grid; grid-template-columns: 1fr; gap:8px; }
-
-    .pmBtn{
-      width:100%;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid var(--line);
-      background:#fff;
-      cursor:pointer;
-      text-align:left;
-    }
-    .pmBtn:hover{ background:var(--accent-soft); border-color:#cfe6dc; }
-    .pmBtn .l{ display:flex; align-items:center; gap:10px; color:#2f463d; font-size:14px; font-weight:600; }
-    .pmBtn .r{ color:var(--muted); font-size:12px; }
-
-    /* Modal */
-    .modalOverlay{
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,.25);
-      display:none;
-      z-index:1000;
-    }
-    .modalOverlay.open{ display:block; }
-    .modal{
-      width:min(560px, calc(100% - 24px));
-      margin:70px auto;
-      border-radius:18px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.96);
-      backdrop-filter: blur(16px);
-      box-shadow: var(--shadow);
-      padding:14px;
-    }
-    .modal h3{ margin:6px 6px 10px; font-size:16px; color:#203127; }
-    .modal p{ margin:0 6px 10px; color:var(--muted); font-size:13px; line-height:1.35; }
-    .modal .row{ display:flex; gap:10px; padding:6px; align-items:center; flex-wrap:wrap; }
-    .modal input{
-      flex:1;
-      border-radius:12px;
-      border:1px solid var(--line);
-      padding:10px 12px;
-      outline:none;
-      font-size:14px;
-      min-width: 240px;
-    }
-    .modalActions{
-      display:flex;
-      justify-content:flex-end;
-      gap:10px;
-      padding:6px;
-      margin-top:6px;
-      flex-wrap:wrap;
-    }
-    .btn{
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#fff;
-      padding:10px 12px;
-      cursor:pointer;
-      font-size:13px;
-      color:#2f463d;
-    }
-    .btn.primary{
-      border-color:#b8dccc;
-      background:linear-gradient(180deg,#e7f4ee,#d7eee5);
-    }
-
-    .tiny{
-      font-size:12px;
-      color:var(--muted);
-      padding: 0 6px 10px;
-      line-height: 1.35;
-    }
-
     @media (max-width: 920px){
       .app{ grid-template-columns: 1fr; }
       .sidebar{ display:none; }
       .title{ font-size:34px; }
-      .plusMenu{ left:18px; right:18px; width:auto; }
     }
   </style>
 </head>
@@ -460,10 +338,12 @@
         <span>Новий діалог</span>
       </button>
 
-      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
-      <div class="sb-list" id="kbList"></div>
+      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">data/raw</span></div>
+      <div class="sb-list" id="kbList">
+        <div class="sb-item">Файли беруться з <b>data/raw/*.txt</b> (через бекенд)</div>
+      </div>
 
-      <div class="sb-footer">🧬 Консультант з біології • локальна база</div>
+      <div class="sb-footer">🧬 Консультант з біології • твоя база</div>
     </aside>
 
     <main class="main" id="main">
@@ -481,10 +361,10 @@
             <span class="leafMark" aria-hidden="true"></span>
             <span>Привіт! Я BioConsult</span>
           </div>
-          <h1 class="title">Навчай мене своїми матеріалами — і я відповідатиму точніше</h1>
+          <h1 class="title">Я відповідаю як ChatGPT, але з твоєї бази</h1>
           <div class="subtitle">
-            Натисни “+” → додай .txt/.md (це буде база знань). Потім став запитання —
-            я знайду релевантне у твоїй базі та сформую відповідь простими словами (без показу конспектів).
+            База знань — це файли <b>data/raw/*.txt або .md</b>.  
+            Після додавання/зміни файлів натисни кнопку <b>Reindex</b> (внизу) або виклич /api/reindex.
           </div>
         </div>
 
@@ -494,43 +374,8 @@
       <div class="composer-wrap">
         <div class="composer-area">
           <div class="composer" id="composer">
-            <!-- PLUS MENU -->
-            <div class="plusMenu" id="plusMenu" role="menu" aria-label="Меню додавання">
-              <div class="pmTitle">
-                <span>Додати</span>
-                <button class="iconbtn" id="closePlusMenu" title="Закрити" aria-label="Закрити" style="width:32px;height:32px;">✕</button>
-              </div>
-              <div class="pmGrid">
-                <button class="pmBtn" id="pmAddImageFile" type="button">
-                  <div class="l">🖼️ Додати зображення (файл)</div>
-                  <div class="r">jpg/png/webp</div>
-                </button>
-                <button class="pmBtn" id="pmAddImageUrl" type="button">
-                  <div class="l">☁️ Додати зображення з URL</div>
-                  <div class="r">посилання</div>
-                </button>
-                <button class="pmBtn" id="pmAddTextFile" type="button">
-                  <div class="l">📄 Додати матеріал (.txt/.md)</div>
-                  <div class="r">в базу</div>
-                </button>
-                <button class="pmBtn" id="pmClearKB" type="button">
-                  <div class="l">🧽 Очистити базу знань</div>
-                  <div class="r">RAG</div>
-                </button>
-                <button class="pmBtn" id="pmClearChat" type="button">
-                  <div class="l">🧹 Очистити чат</div>
-                  <div class="r">скинути</div>
-                </button>
-              </div>
-              <div class="tiny">Порада: додай кілька конспектів .txt/.md — відповіді стануть “під твою програму”.</div>
-            </div>
-
             <div class="composer-row">
-              <button class="plus" id="plusBtn" title="Додати" aria-label="Додати">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </button>
+              <button class="plus" id="reindexBtn" title="Оновити індекс" aria-label="Оновити індекс">↻</button>
 
               <div class="input">
                 <textarea id="prompt" placeholder="Запитайте BioConsult…" rows="1"></textarea>
@@ -554,71 +399,31 @@
             </div>
 
             <div class="hint">
-              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — матеріали/зображення</span>
+              <span>Enter — надіслати • Shift+Enter — новий рядок • ↻ — reindex</span>
               <span id="statusText">Готово</span>
             </div>
-
-            <!-- hidden inputs -->
-            <input id="imageInput" type="file" accept="image/*" hidden />
-            <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
           </div>
         </div>
       </div>
     </main>
   </div>
 
-  <!-- MODAL: Image URL -->
-  <div class="modalOverlay" id="imgModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Додати зображення за URL">
-      <h3>Додати зображення з URL</h3>
-      <p>Встав пряме посилання на зображення (або публічний URL).</p>
-      <div class="row">
-        <input id="imgUrlInput" placeholder="https://..." />
-      </div>
-      <div class="modalActions">
-        <button class="btn" id="cancelImgModal">Скасувати</button>
-        <button class="btn primary" id="addUrlBtn">Додати</button>
-      </div>
-    </div>
-  </div>
-
   <script>
-    /***********************
-     * UI refs
-     ***********************/
+    // ========= CONFIG =========
+    const API_BASE = "http://localhost:8000"; // <-- якщо деплой: постав свій домен бекенду
+
+    // ========= UI refs =========
     const promptEl = document.getElementById('prompt');
     const sendBtn  = document.getElementById('sendBtn');
     const chatLog  = document.getElementById('chatLog');
     const chips    = document.getElementById('chips');
     const newChatBtn = document.getElementById('newChatBtn');
     const statusText = document.getElementById('statusText');
-
     const ragToggleBtn = document.getElementById('ragToggleBtn');
-
-    const plusBtn = document.getElementById('plusBtn');
-    const plusMenu = document.getElementById('plusMenu');
-    const closePlusMenu = document.getElementById('closePlusMenu');
-
-    const pmAddImageFile = document.getElementById('pmAddImageFile');
-    const pmAddImageUrl  = document.getElementById('pmAddImageUrl');
-    const pmAddTextFile  = document.getElementById('pmAddTextFile');
-    const pmClearChat    = document.getElementById('pmClearChat');
-    const pmClearKB      = document.getElementById('pmClearKB');
-
-    const imageInput = document.getElementById('imageInput');
-    const textInput  = document.getElementById('textInput');
-
-    const imgModalOverlay = document.getElementById('imgModalOverlay');
-    const imgUrlInput = document.getElementById('imgUrlInput');
-    const cancelImgModal = document.getElementById('cancelImgModal');
-    const addUrlBtn = document.getElementById('addUrlBtn');
-
-    const kbList = document.getElementById('kbList');
-    const kbCount = document.getElementById('kbCount');
+    const reindexBtn = document.getElementById('reindexBtn');
 
     let ragEnabled = true;
-    let pendingImageDataUrl = null;
-    let pendingImageLabel = null;
+    let sendingLock = false;
 
     function setStatus(t){ statusText.textContent = t; }
 
@@ -628,9 +433,6 @@
     }
     promptEl.addEventListener('input', autoResize);
 
-    /***********************
-     * Chat render
-     ***********************/
     function addMsg(text, who="user") {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
@@ -639,137 +441,13 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    function addImagePreviewMessage({ dataUrl, caption, who="user" }){
-      const div = document.createElement('div');
-      div.className = `msg ${who}`;
-      div.textContent = caption || "Зображення додано:";
-
-      const wrap = document.createElement('div');
-      wrap.className = "imgwrap";
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = "image";
-      wrap.appendChild(img);
-      div.appendChild(wrap);
-
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    /***********************
-     * Plus menu
-     ***********************/
-    function openMenu(){ plusMenu.classList.add("open"); }
-    function closeMenu(){ plusMenu.classList.remove("open"); }
-
-    plusBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      plusMenu.classList.contains("open") ? closeMenu() : openMenu();
-    });
-    closePlusMenu.addEventListener('click', closeMenu);
-
-    document.addEventListener('click', (e) => {
-      if (!plusMenu.contains(e.target) && e.target !== plusBtn) closeMenu();
-    });
-
-    pmAddImageFile.addEventListener('click', () => { closeMenu(); imageInput.click(); });
-    pmAddTextFile.addEventListener('click', () => { closeMenu(); textInput.click(); });
-    pmAddImageUrl.addEventListener('click', () => { closeMenu(); openImgModal(); });
-
-    pmClearChat.addEventListener('click', () => {
-      closeMenu();
-      chatLog.innerHTML = "";
-      addMsg("Чат очищено ✅", "bot");
-      setStatus("Готово");
-    });
-
-    pmClearKB.addEventListener('click', () => {
-      closeMenu();
-      if (!confirm("Очистити базу знань (всі матеріали)?")) return;
-      KB.clear();
-      RAG.rebuildIndexFromKB();
-      renderKB();
-      addMsg("Базу знань очищено ✅", "bot");
-      setStatus("Готово");
-    });
-
-    /***********************
-     * Image modal
-     ***********************/
-    function openImgModal(){
-      imgModalOverlay.classList.add("open");
-      imgModalOverlay.setAttribute("aria-hidden","false");
-      imgUrlInput.value = "";
-      setTimeout(() => imgUrlInput.focus(), 0);
-    }
-    function closeImgModal(){
-      imgModalOverlay.classList.remove("open");
-      imgModalOverlay.setAttribute("aria-hidden","true");
-    }
-    cancelImgModal.addEventListener('click', closeImgModal);
-    imgModalOverlay.addEventListener('click', (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
-
-    addUrlBtn.addEventListener('click', async () => {
-      const url = (imgUrlInput.value || "").trim();
-      if(!url) return;
-
-      pendingImageDataUrl = url;
-      pendingImageLabel = "Зображення (URL)";
-      addMsg("✅ Зображення додано. Можеш поставити питання про нього.", "bot");
-      closeImgModal();
-    });
-
-    /***********************
-     * RAG toggle
-     ***********************/
+    // ========= Actions =========
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
       ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
-      setStatus("Готово");
     });
 
-    /***********************
-     * Inputs
-     ***********************/
-    imageInput.addEventListener('change', async () => {
-      const file = imageInput.files?.[0];
-      if(!file) return;
-
-      if(!file.type.startsWith("image/")){
-        addMsg("❌ Це не зображення.", "bot");
-        imageInput.value = "";
-        return;
-      }
-
-      const dataUrl = await fileToDataURL(file);
-      pendingImageDataUrl = dataUrl;
-      pendingImageLabel = file.name;
-
-      addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Ок. Тепер напиши, що саме треба визначити/пояснити на цьому зображенні.", "bot");
-
-      imageInput.value = "";
-    });
-
-    textInput.addEventListener('change', async () => {
-      const file = textInput.files?.[0];
-      if(!file) return;
-      const text = await file.text();
-
-      KB.addDoc({ title: file.name, text });
-      RAG.rebuildIndexFromKB();
-      renderKB();
-
-      addMsg(`✅ Додано/оновлено матеріал у базі: ${file.name}`, "bot");
-      setStatus("Готово");
-
-      textInput.value = "";
-    });
-
-    /***********************
-     * Chips & new chat
-     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -784,15 +462,22 @@
       autoResize();
       promptEl.focus();
       setStatus("Готово");
-      closeMenu();
     });
 
-    /***********************
-     * Send (OFFLINE ONLY) — FIX double answers
-     ***********************/
-    let sendingLock = false;
+    reindexBtn.addEventListener('click', async () => {
+      try{
+        setStatus("Reindex…");
+        const res = await fetch(`${API_BASE}/api/reindex`, { method:"POST" });
+        const data = await res.json();
+        addMsg(`✅ Індекс оновлено. chunks=${data.chunks}`, "bot");
+        setStatus("Готово");
+      }catch(err){
+        addMsg("❌ Reindex помилка: " + (err?.message || String(err)), "bot");
+        setStatus("Помилка");
+      }
+    });
 
-    sendBtn.onclick = send; // важно: не addEventListener
+    sendBtn.onclick = send;
     promptEl.onkeydown = (e) => {
       if(e.key === "Enter" && !e.shiftKey){
         e.preventDefault();
@@ -803,7 +488,6 @@
     async function send(){
       const text = (promptEl.value || "").trim();
       if(!text) return;
-
       if (sendingLock) return;
       sendingLock = true;
 
@@ -815,14 +499,16 @@
         promptEl.value = "";
         autoResize();
 
-        const contexts = ragEnabled ? RAG.retrieveTopK(text, 7) : [];
-        const offline = offlineAnswerFromContexts(text, contexts);
+        const res = await fetch(`${API_BASE}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: text, rag: ragEnabled, top_k: 6 })
+        });
 
-        addMsg(offline, "bot");
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
 
-        pendingImageDataUrl = null;
-        pendingImageLabel = null;
-
+        addMsg(data.answer, "bot");
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -833,469 +519,9 @@
       }
     }
 
-    /***********************
-     * KB storage (docs) — FIX duplicates + upsert by title
-     ***********************/
-    const KB = {
-      key: "bioconsult_kb_docs",
-
-      getAll(){
-        try { return JSON.parse(localStorage.getItem(this.key) || "[]"); }
-        catch { return []; }
-      },
-
-      setAll(docs){
-        localStorage.setItem(this.key, JSON.stringify(docs || []));
-      },
-
-      upsertByTitle(title, text){
-        const docs = this.getAll();
-        const t = String(title || "doc.txt");
-        const i = docs.findIndex(d => d.title === t);
-
-        if (i >= 0) {
-          docs[i].text = String(text || "");
-          docs[i].updatedAt = Date.now();
-        } else {
-          docs.push({
-            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
-            title: t,
-            text: String(text || ""),
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-          });
-        }
-        this.setAll(docs);
-      },
-
-      addDoc(doc){
-        this.upsertByTitle(doc.title, doc.text);
-      },
-
-      remove(id){
-        const docs = this.getAll().filter(d => d.id !== id);
-        this.setAll(docs);
-      },
-
-      clear(){ this.setAll([]); }
-    };
-
-    function renderKB(){
-      const docs = KB.getAll();
-      kbCount.textContent = `${docs.length} файлів`;
-      kbList.innerHTML = "";
-
-      if(docs.length === 0){
-        const empty = document.createElement("div");
-        empty.className = "sb-item";
-        empty.textContent = "Додай .txt/.md через “+” або поклади файл у data/raw";
-        kbList.appendChild(empty);
-        return;
-      }
-
-      docs.slice().reverse().forEach(d => {
-        const row = document.createElement("div");
-        row.className = "sb-item";
-        row.title = "Натисни, щоб видалити";
-
-        const dot = document.createElement("span");
-        dot.className = "badge";
-        dot.style.width = "10px";
-        dot.style.height = "10px";
-        dot.style.boxShadow = "none";
-        row.appendChild(dot);
-
-        const name = document.createElement("div");
-        name.textContent = d.title;
-        name.style.flex = "1";
-        row.appendChild(name);
-
-        const del = document.createElement("span");
-        del.textContent = "🗑️";
-        del.style.opacity = ".75";
-        row.appendChild(del);
-
-        row.addEventListener("click", () => {
-          if(!confirm(`Видалити "${d.title}" з бази?`)) return;
-          KB.remove(d.id);
-          RAG.rebuildIndexFromKB();
-          renderKB();
-          addMsg(`✅ Видалено з бази: ${d.title}`, "bot");
-        });
-
-        kbList.appendChild(row);
-      });
-    }
-
-    /***********************
-     * RAG in browser (TF-IDF-ish)
-     ***********************/
-    const RAG = (() => {
-      let chunks = [];     // {title, text, id, vec}
-      let stats = null;    // {df, N}
-
-      function tokenize(text) {
-        return (text || "")
-          .toLowerCase()
-          .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-          .split(/\s+/)
-          .filter(Boolean);
-      }
-
-      function chunkText(text, chunkSize = 900, overlap = 120) {
-        const clean = (text || "").replace(/\s+/g, " ").trim();
-        if (!clean) return [];
-        const out = [];
-        let i = 0;
-        while (i < clean.length) {
-          const end = Math.min(clean.length, i + chunkSize);
-          out.push(clean.slice(i, end));
-          i = end - overlap;
-          if (i < 0) i = 0;
-          if (end === clean.length) break;
-        }
-        return out;
-      }
-
-      function buildVocabStats(chunks) {
-        const df = Object.create(null);
-        for (const ch of chunks) {
-          const seen = new Set(tokenize(ch.text));
-          for (const t of seen) df[t] = (df[t] || 0) + 1;
-        }
-        return { df, N: chunks.length };
-      }
-
-      function embed(text, stats) {
-        const toks = tokenize(text);
-        const tf = Object.create(null);
-        for (const t of toks) tf[t] = (tf[t] || 0) + 1;
-
-        const vec = Object.create(null);
-        const { df, N } = stats || { df:{}, N:1 };
-        for (const [t, f] of Object.entries(tf)) {
-          const d = df[t] || 0;
-          const idf = Math.log((N + 1) / (d + 1)) + 1;
-          vec[t] = f * idf;
-        }
-        return vec;
-      }
-
-      function cosine(a, b) {
-        let dot = 0, na = 0, nb = 0;
-        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-        for (const k of keys) {
-          const x = a[k] || 0;
-          const y = b[k] || 0;
-          dot += x * y;
-          na += x * x;
-          nb += y * y;
-        }
-        if (!na || !nb) return 0;
-        return dot / (Math.sqrt(na) * Math.sqrt(nb));
-      }
-
-      function rebuildIndexFromKB(){
-        const docs = KB.getAll();
-        chunks = [];
-        for (const d of docs) {
-          const parts = chunkText(d.text);
-          parts.forEach((p, idx) => {
-            chunks.push({ title: d.title, text: p, id: `${d.title}#${idx}` });
-          });
-        }
-        stats = buildVocabStats(chunks);
-        chunks.forEach(ch => ch.vec = embed(ch.text, stats));
-      }
-
-      function retrieveTopK(question, k=6){
-        if(!stats || !chunks.length) return [];
-        const qvec = embed(question, stats);
-        const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
-        scored.sort((a,b)=>b.score-a.score);
-
-        // ✅ Підвищений поріг, щоб менше "лівих" відповідей
-        return scored
-          .slice(0, k)
-          .filter(x => x.score > 0.12)
-          .map(x => x.ch);
-      }
-
-      return { rebuildIndexFromKB, retrieveTopK };
-    })();
-
-    // ===============================
-    // OFFLINE Answer v3 (без API)
-    // - зв’язний "як Gemini" стиль
-    // - НЕ показує конспекти і не цитує
-    // - мінімізує "несвязні" фрази
-    // ===============================
-    function offlineAnswerFromContexts(question, contexts) {
-      const q = (question || "").trim();
-      if (!q) return "Напиши запитання 🙂";
-
-      if (!Array.isArray(contexts) || contexts.length === 0) {
-        return "У базі знань немає релевантного фрагмента під це питання. Спробуй коротше/точніше (2–6 ключових слів).";
-      }
-
-      const intent = detectIntent(q);
-      const facts = extractFactsFromContexts(q, contexts);
-
-      if (!facts.ok) {
-        // якщо контекст є, але слабкий — даємо коротку корисну відповідь-рамку без води
-        return buildSafeFallback(q, intent);
-      }
-
-      // Робимо "унікальність" через перефраз + структуру
-      return composeAnswer(q, intent, facts.bullets);
-    }
-
-    function detectIntent(q) {
-      const s = normalizeText(q);
-      if (/(різниц|відрізня|vs|порівня)/i.test(s)) return "compare";
-      if (/(етап|стад|фаз|крок|процес|як відбува)/i.test(s)) return "process";
-      if (/(функц|роль|для чого|навіщо)/i.test(s)) return "function";
-      if (/(що таке|визнач|поясни|означає)/i.test(s)) return "define";
-      return "general";
-    }
-
-    function extractFactsFromContexts(question, contexts) {
-      const qTokens = keyTokens(question);
-
-      const candidates = [];
-      for (const c of contexts.slice(0, 5)) {
-        const txt = String(c?.text || "");
-        const sentences = splitSentences(cleanMarkup(txt));
-
-        for (const sent of sentences) {
-          const s = sent.trim();
-          if (s.length < 25) continue;
-
-          const score = scoreSentence(s, qTokens);
-          if (score >= 2 && looksLikeFact(s) && !looksLikeGarbage(s)) {
-            candidates.push({ s, score });
-          }
-        }
-      }
-
-      candidates.sort((a, b) => b.score - a.score);
-
-      const uniq = [];
-      const seen = new Set();
-      for (const it of candidates) {
-        const k = normalizeText(it.s).slice(0, 220);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        uniq.push(it.s);
-        if (uniq.length >= 10) break;
-      }
-
-      if (uniq.length < 2) return { ok: false, bullets: [] };
-
-      const bullets = uniq
-        .map(s => compressSentence(s))
-        .filter(Boolean)
-        .slice(0, 8);
-
-      return { ok: bullets.length >= 2, bullets };
-    }
-
-    function scoreSentence(sentence, qTokens) {
-      const s = normalizeText(sentence);
-      let score = 0;
-      for (const t of qTokens) if (s.includes(t)) score += 1;
-      if (/(— це|це |назива|означа|визнача)/i.test(sentence)) score += 1;
-      if (/(склада|містить|характер|відбува|потрібн|забезпеч|функц|роль)/i.test(sentence)) score += 1;
-      return score;
-    }
-
-    function looksLikeFact(s) {
-      if (/(я думаю|можливо|ймовірно|напевно)/i.test(s)) return false;
-      return /[A-Za-zА-Яа-яІЇЄҐієїґ]/.test(s);
-    }
-
-    function looksLikeGarbage(s){
-      // прибираємо типові "випадкові" вставки зі статистикою, якщо питання не про генетику
-      const t = normalizeText(s);
-      if (/(9 3 3 1|1 2 1|3 1|aa|Aa|AA)/i.test(t)) return true;
-      if (t.length < 15) return true;
-      return false;
-    }
-
-    function composeAnswer(question, intent, bullets) {
-      // беремо 4-6 фактів і перефразовуємо
-      const base = bullets.slice(0, 6).map(b => rewriteSoft(b));
-
-      const intro = makeIntro(intent);
-      const core = buildCore(intent, base);
-      const extra = buildExtra(intent, base);
-
-      return [intro, core, extra].filter(Boolean).join("\n\n");
-    }
-
-    function makeIntro(intent){
-      if (intent === "compare") return "Ось різниця простими словами:";
-      if (intent === "process") return "Опис процесу по кроках:";
-      if (intent === "function") return "Ключові функції та роль:";
-      if (intent === "define") return "Коротке визначення й суть:";
-      return "Пояснення простими словами:";
-    }
-
-    function buildCore(intent, items){
-      if (intent === "process"){
-        const steps = items.slice(0,5).map((t,i)=>`${i+1}) ${t}`);
-        return steps.join("\n");
-      }
-      if (intent === "compare"){
-        const a = items.slice(0,3);
-        const b = items.slice(3,6);
-        const left = a.length ? ("• " + a.join("\n• ")) : "";
-        const right = b.length ? ("• " + b.join("\n• ")) : "";
-        return [left, right].filter(Boolean).join("\n");
-      }
-      // define/function/general
-      return items.slice(0,4).join(" ");
-    }
-
-    function buildExtra(intent, items){
-      if (intent === "compare"){
-        return "Якщо скажеш, які саме 2 поняття порівнюємо, зроблю таблицю «A vs B».";
-      }
-      if (intent === "process"){
-        return "Якщо треба — уточни рівень (7/9/11 клас), і я підлаштую складність.";
-      }
-      if (intent === "function"){
-        return "Хочеш — додам приклади (де саме це зустрічається і як перевіряють на практиці).";
-      }
-      return "";
-    }
-
-    function buildSafeFallback(q, intent){
-      if (intent === "compare"){
-        return "Щоб чітко порівняти, напиши два терміни у форматі: «A vs B».";
-      }
-      if (intent === "process"){
-        return "Я бачу тему, але в базі мало конкретних кроків. Напиши: «етапи + назва процесу».";
-      }
-      if (intent === "define"){
-        return "Уточни термін одним словом (або 2–3), і я дам точне визначення з бази.";
-      }
-      return "Уточни запит 2–6 ключовими словами — тоді RAG знайде точніший фрагмент.";
-    }
-
-    function rewriteSoft(s) {
-      let t = String(s || "").trim().replace(/\s+/g, " ");
-      t = t.replace(/^\W+|\W+$/g, "");
-
-      // легке перефразування без ламання змісту
-      const repl = [
-        [/\bце\b/gi, "це явище"],
-        [/\bзабезпечує\b/gi, "допомагає забезпечити"],
-        [/\bвідбувається\b/gi, "проходить"],
-        [/\bвикористовується\b/gi, "застосовується"],
-        [/\bхарактеризується\b/gi, "зазвичай описують як"],
-      ];
-      for (const [a,b] of repl) t = t.replace(a,b);
-
-      if (t.length > 240) t = t.slice(0, 240).trim() + "…";
-      return t;
-    }
-
-    function normalizeText(s) {
-      return String(s || "")
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    function keyTokens(s) {
-      const stop = new Set(["який","яка","яке","що","таке","це","про","для","коли","як","та","або","чи","у","в","на","до","з","із","ми","ви","вони","де","є","чи"]);
-      return normalizeText(s)
-        .split(" ")
-        .filter(w => w.length >= 4 && !stop.has(w))
-        .slice(0, 12);
-    }
-
-    function cleanMarkup(s) {
-      return String(s || "")
-        .replace(/[*_`#>-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    function splitSentences(text) {
-      const t = String(text || "").trim();
-      if (!t) return [];
-      return t.split(/(?<=[.!?…])\s+/);
-    }
-
-    function compressSentence(s) {
-      let t = String(s || "").replace(/\([^)]*\)/g, "").trim();
-      t = t.replace(/\s+/g, " ");
-      if (t.length < 25) return "";
-      if (t.length > 280) t = t.slice(0, 280).trim() + "…";
-      return t;
-    }
-
-    /***********************
-     * Seed KB from repo — ALWAYS refresh from file
-     * app/index.html -> ../data/raw/biology_basics.txt
-     ***********************/
-    async function seedKBFromRepoAlways() {
-      const url = "../data/raw/biology_basics.txt";
-      try {
-        setStatus("Оновлюю базу знань…");
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("Не вдалося завантажити " + url + " (HTTP " + res.status + ")");
-        const text = await res.text();
-
-        KB.upsertByTitle("biology_basics.txt", text);
-        RAG.rebuildIndexFromKB();
-        renderKB();
-
-        setStatus("Готово");
-      } catch (e) {
-        addMsg(
-          "⚠️ Не зміг завантажити базу знань з репо.\n" +
-          "Перевір шлях: data/raw/biology_basics.txt\n" +
-          "Помилка: " + (e?.message || String(e)),
-          "bot"
-        );
-        setStatus("Готово");
-      }
-    }
-
-    /***********************
-     * Helpers
-     ***********************/
-    function fileToDataURL(file){
-      return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
-    }
-
-    /***********************
-     * Init
-     ***********************/
-    async function init(){
-      renderKB();
-      RAG.rebuildIndexFromKB();
-      autoResize();
-      setStatus("Готово");
-
-      // ✅ завжди підтягуємо файл з репо і НЕ дублюємо
-      await seedKBFromRepoAlways();
-
-      // підказка при першому запуску
-      if (KB.getAll().length === 0) {
-        addMsg("Додай матеріал через “+” або поклади файл у data/raw/biology_basics.txt.", "bot");
-      }
-    }
-    init();
+    // init
+    autoResize();
+    addMsg("👋 Запусти бекенд і натисни ↻ щоб проіндексувати data/raw. Потім став питання.", "bot");
   </script>
 </body>
 </html>
