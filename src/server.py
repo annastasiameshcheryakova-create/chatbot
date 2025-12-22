@@ -9,6 +9,7 @@ import chromadb
 from chromadb.config import Settings
 from openai import OpenAI
 
+# ========= CONFIG =========
 load_dotenv()
 
 DATA_DIR = "data/raw"
@@ -25,7 +26,7 @@ app = FastAPI(title="BioConsult RAG API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # для тесту; потім краще звузити
+    allow_origins=["*"],  # для тестів, потім краще звузити
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,13 +37,16 @@ chroma = chromadb.PersistentClient(
     settings=Settings(anonymized_telemetry=False)
 )
 
+# ========= Utils =========
+def ensure_dirs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(PERSIST_DIR, exist_ok=True)
+
 def get_collection():
     return chroma.get_or_create_collection(COLLECTION)
 
 def read_raw_texts() -> List[Dict]:
-    if not os.path.isdir(DATA_DIR):
-        os.makedirs(DATA_DIR, exist_ok=True)
-
+    ensure_dirs()
     docs = []
     for fn in os.listdir(DATA_DIR):
         if fn.lower().endswith((".txt", ".md")):
@@ -72,8 +76,11 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     )
     return [d.embedding for d in resp.data]
 
+# ========= RAG =========
 def rebuild_index() -> Dict:
-    # Пересоздаємо колекцію
+    ensure_dirs()
+
+    # пересоздаємо колекцію
     try:
         chroma.delete_collection(COLLECTION)
     except Exception:
@@ -95,9 +102,9 @@ def rebuild_index() -> Dict:
 
     batch = 64
     for start in range(0, len(texts), batch):
-        sub_texts = texts[start:start+batch]
-        sub_ids = ids[start:start+batch]
-        sub_meta = metadatas[start:start+batch]
+        sub_texts = texts[start:start + batch]
+        sub_ids = ids[start:start + batch]
+        sub_meta = metadatas[start:start + batch]
         sub_emb = embed_texts(sub_texts)
 
         col.add(
@@ -111,44 +118,60 @@ def rebuild_index() -> Dict:
 
 def retrieve(question: str, k: int = 6) -> List[Dict]:
     col = get_collection()
+
     q_emb = embed_texts([question])[0]
     res = col.query(query_embeddings=[q_emb], n_results=k)
 
-    out = []
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
 
+    out = []
     for doc, meta in zip(docs, metas):
         out.append({"title": meta.get("title", "kb"), "text": doc})
     return out
 
+# ========= Prompt (ВАЖЛИВО: fallback якщо контексту нема) =========
 def build_messages(question: str, contexts: List[Dict]) -> List[Dict]:
-    context_block = "\n\n".join(
-        [f"[{i+1}] ({c['title']}) {c['text']}" for i, c in enumerate(contexts)]
-    )
+    if contexts:
+        context_block = "\n\n".join(
+            [f"[{i+1}] ({c['title']}) {c['text']}" for i, c in enumerate(contexts)]
+        )
 
-    system = (
-        "Ти BioConsult — дружній навчальний асистент з біології. "
-        "Відповідай українською, просто і структуровано. "
-        "Контекст нижче — це база знань (використовуй її як джерело). "
-        "НЕ цитуй уривки дослівно і НЕ показуй конспекти. "
-        "Якщо в контексті немає відповіді — скажи чесно і попроси уточнення."
-    )
+        system = (
+            "Ти BioConsult — дружній навчальний асистент з біології. "
+            "Відповідай українською, просто і структуровано. "
+            "Контекст нижче — це база знань (використовуй її як джерело). "
+            "НЕ цитуй уривки дослівно і НЕ показуй конспекти. "
+            "Якщо контекст суперечить твоїм знанням — довіряй контексту."
+        )
 
-    user = (
-        f"КОНТЕКСТ (для тебе):\n{context_block}\n\n"
-        f"ПИТАННЯ: {question}\n\n"
-        "Формат відповіді:\n"
-        "1) коротко суть\n"
-        "2) пояснення простими словами\n"
-        "3) якщо доречно — список/кроки\n"
-    )
+        user = (
+            f"КОНТЕКСТ (для тебе):\n{context_block}\n\n"
+            f"ПИТАННЯ: {question}\n\n"
+            "Дай відповідь:\n"
+            "1) коротко суть\n"
+            "2) пояснення простими словами\n"
+            "3) якщо доречно — список/кроки\n"
+        )
+        return [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
+    else:
+        # ✅ Немає контексту -> відповідаємо зі загальних знань
+        system = (
+            "Ти BioConsult — дружній навчальний асистент з біології. "
+            "Відповідай українською, просто і чітко. "
+            "По цьому питанню в базі знань немає контексту, тому відповідай зі своїх загальних знань. "
+            "Якщо не впевнений — скажи 'не впевнений' і постав 1 уточнювальне питання."
+        )
+        user = (
+            f"ПИТАННЯ: {question}\n\n"
+            "Формат:\n"
+            "Почни з фрази 'Це ...' і дай коротке пояснення 2–6 реченнями.\n"
+        )
+        return [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
 
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
-
+# ========= API =========
 class ChatIn(BaseModel):
     question: str
     rag: bool = True
