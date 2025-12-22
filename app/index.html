@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BioConsult — RAG Chat</title>
+  <title>BioConsult — Pastel RAG Chat</title>
 
   <style>
     :root{
@@ -89,8 +89,10 @@
       border-radius:14px;
       font-size:14px;
       color:#233528;
+      cursor:pointer;
       display:flex;align-items:center;gap:10px;
     }
+    .sb-item:hover{ background:var(--accent-soft); }
     .sb-footer{
       border-top:1px solid var(--line);
       padding:10px 6px 6px;
@@ -336,12 +338,12 @@
         <span>Новий діалог</span>
       </button>
 
-      <div class="sb-section"><span>База знань</span><span style="opacity:.7">data/raw/*.txt</span></div>
+      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">data/raw</span></div>
       <div class="sb-list" id="kbList">
-        <div class="sb-item">Додавай конспекти у <b>data/raw</b>, потім натисни ↻ (reindex)</div>
+        <div class="sb-item">Файли беруться з <b>data/raw/*.txt</b> (через бекенд)</div>
       </div>
 
-      <div class="sb-footer">🧬 Консультант з біології • RAG + fallback</div>
+      <div class="sb-footer">🧬 Консультант з біології • твоя база</div>
     </aside>
 
     <main class="main" id="main">
@@ -359,9 +361,10 @@
             <span class="leafMark" aria-hidden="true"></span>
             <span>Привіт! Я BioConsult</span>
           </div>
-          <h1 class="title">Я відповідаю завжди</h1>
+          <h1 class="title">Я відповідаю як ChatGPT, але з твоєї бази</h1>
           <div class="subtitle">
-            Якщо в базі є відповідь — використаю її. Якщо ні — відповім зі загальних знань у форматі “Це ...”.
+            База знань — це файли <b>data/raw/*.txt або .md</b>.  
+            Після додавання/зміни файлів натисни кнопку <b>Reindex</b> (внизу) або виклич /api/reindex.
           </div>
         </div>
 
@@ -406,11 +409,10 @@
   </div>
 
   <script>
-    // ====== ВАЖЛИВО ======
-    // Якщо бекенд локально: localhost:8000
-    // Якщо деплой: постав URL бекенду, наприклад https://your-api.onrender.com
-    const API_BASE = "http://localhost:8000";
+    // ========= CONFIG =========
+    const API_BASE = "http://localhost:8000"; // <-- якщо деплой: постав свій домен бекенду
 
+    // ========= UI refs =========
     const promptEl = document.getElementById('prompt');
     const sendBtn  = document.getElementById('sendBtn');
     const chatLog  = document.getElementById('chatLog');
@@ -439,6 +441,7 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    // ========= Actions =========
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
@@ -518,7 +521,7 @@
 
     // init
     autoResize();
-    addMsg("👋 1) Запусти бекенд (uvicorn) 2) натисни ↻ (reindex) 3) став питання.", "bot");
+    addMsg("👋 Запусти бекенд і натисни ↻ щоб проіндексувати data/raw. Потім став питання.", "bot");
   </script>
 </body>
 </html>
