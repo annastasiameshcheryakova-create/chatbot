@@ -205,19 +205,6 @@
     }
     .msg.bot{ align-self:flex-start; }
 
-    .msg .imgwrap{
-      margin-top:10px;
-      border-radius:14px;
-      overflow:hidden;
-      border:1px solid var(--line);
-      background:#fff;
-    }
-    .msg img{
-      display:block;
-      max-width:100%;
-      height:auto;
-    }
-
     /* Composer */
     .composer-wrap{
       position:absolute;
@@ -363,59 +350,6 @@
     .pmBtn .l{ display:flex; align-items:center; gap:10px; color:#2f463d; font-size:14px; font-weight:600; }
     .pmBtn .r{ color:var(--muted); font-size:12px; }
 
-    /* Modal */
-    .modalOverlay{
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,.25);
-      display:none;
-      z-index:1000;
-    }
-    .modalOverlay.open{ display:block; }
-    .modal{
-      width:min(560px, calc(100% - 24px));
-      margin:70px auto;
-      border-radius:18px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.96);
-      backdrop-filter: blur(16px);
-      box-shadow: var(--shadow);
-      padding:14px;
-    }
-    .modal h3{ margin:6px 6px 10px; font-size:16px; color:#203127; }
-    .modal p{ margin:0 6px 10px; color:var(--muted); font-size:13px; line-height:1.35; }
-    .modal .row{ display:flex; gap:10px; padding:6px; align-items:center; flex-wrap:wrap; }
-    .modal input{
-      flex:1;
-      border-radius:12px;
-      border:1px solid var(--line);
-      padding:10px 12px;
-      outline:none;
-      font-size:14px;
-      min-width: 240px;
-    }
-    .modalActions{
-      display:flex;
-      justify-content:flex-end;
-      gap:10px;
-      padding:6px;
-      margin-top:6px;
-      flex-wrap:wrap;
-    }
-    .btn{
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#fff;
-      padding:10px 12px;
-      cursor:pointer;
-      font-size:13px;
-      color:#2f463d;
-    }
-    .btn.primary{
-      border-color:#b8dccc;
-      background:linear-gradient(180deg,#e7f4ee,#d7eee5);
-    }
-
     .tiny{
       font-size:12px;
       color:var(--muted);
@@ -463,7 +397,7 @@
       <div class="sb-section"><span>База знань</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
       <div class="sb-list" id="kbList"></div>
 
-      <div class="sb-footer">🧬 BioConsult • цитати з biology_basics.txt</div>
+      <div class="sb-footer">🧬 BioConsult • biology_basics.txt</div>
     </aside>
 
     <main class="main" id="main">
@@ -485,8 +419,8 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Відповідаю **цитатами** з твого конспекта <b>biology_basics.txt</b>.
-            Можеш використовувати <b>**жирний**</b> у конспекті — він відобразиться жирним у чаті.
+            Відповідаю короткою **релевантною цитатою** з конспекта <b>biology_basics.txt</b>.
+            Підтримую **жирний** через зірочки: <b>**так**</b>.
           </div>
         </div>
 
@@ -505,7 +439,7 @@
               <div class="pmGrid">
                 <button class="pmBtn" id="pmAddTextFile" type="button">
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
-                  <div class="r">в локальну базу</div>
+                  <div class="r">локально</div>
                 </button>
                 <button class="pmBtn" id="pmClearKB" type="button">
                   <div class="l">🧽 Очистити базу</div>
@@ -516,7 +450,7 @@
                   <div class="r">скинути</div>
                 </button>
               </div>
-              <div class="tiny">УВАГА: відповіді беруться тільки з <b>biology_basics.txt</b> (інші файли ігноруються).</div>
+              <div class="tiny">Відповіді беруться тільки з <b>biology_basics.txt</b>.</div>
             </div>
 
             <div class="composer-row">
@@ -565,7 +499,6 @@
      * UI refs
      ***********************/
     const promptEl = document.getElementById('prompt');
-    const sendBtn  = document.getElementById('sendBtn');
     const chatLog  = document.getElementById('chatLog');
     const chips    = document.getElementById('chips');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -585,6 +518,9 @@
 
     const kbList = document.getElementById('kbList');
     const kbCount = document.getElementById('kbCount');
+
+    // ✅ важливо: спочатку беремо кнопку, потім клонюємо (щоб прибрати подвійні listeners)
+    let sendBtn = document.getElementById('sendBtn');
 
     let ragEnabled = true;
 
@@ -621,7 +557,7 @@
     function addMsg(text, who="user") {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
-      div.innerHTML = mdLiteToHtml(text); // ✅ жирний через **
+      div.innerHTML = mdLiteToHtml(text);
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
@@ -884,16 +820,15 @@
         chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
-      function retrieveTopK(question, k=10){
+      function retrieveTopK(question, k=12){
         if(!stats || !chunks.length) return [];
         const qvec = embed(question, stats);
         const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
         scored.sort((a,b)=>b.score-a.score);
 
-        // ✅ нижчий поріг
         return scored
           .slice(0, k)
-          .filter(x => x.score > 0.03)
+          .filter(x => x.score > 0.06) // ✅ точніше
           .map(x => x.ch);
       }
 
@@ -901,25 +836,84 @@
     })();
 
     /***********************
-     * Відповідь цитатами з biology_basics.txt
+     * Helpers for "по суті"
+     ***********************/
+    function normalize(s){
+      return String(s || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function splitSentencesSmart(text){
+      const t = String(text || "")
+        .replace(/\r/g, " ")
+        .replace(/\n+/g, " ")
+        .trim();
+      if (!t) return [];
+      return t.split(/(?<=[.!?…])\s+/);
+    }
+
+    function looksLikeNoise(s){
+      const t = String(s || "");
+      if (/={3,}|-{3,}|_{3,}|\*{3,}/.test(t)) return true;
+      if (t.length < 10) return true;
+      return false;
+    }
+
+    function scoreSentence(sentence, question){
+      const s = normalize(sentence);
+      const q = normalize(question);
+
+      const qTokens = q.split(" ").filter(w => w.length >= 4).slice(0, 14);
+      let score = 0;
+
+      for (const tok of qTokens){
+        if (s.includes(tok)) score += 2;
+      }
+
+      if (/(це|називають|означає|процес|відбувається|полягає)/i.test(sentence)) score += 2;
+      if (/(особливості|загальне|в цілому|інше)/i.test(sentence)) score -= 1;
+
+      return score;
+    }
+
+    /***********************
+     * Відповідь: ОДНА цитата по суті (без "Цитата з ...")
      ***********************/
     function offlineAnswerFromContexts(question, contexts) {
       const q = (question || "").trim();
       if (!q) return "Напиши запитання 🙂";
 
       if (!Array.isArray(contexts) || contexts.length === 0) {
-        return "У конспекті **biology_basics.txt** я не знайшов фрагмент під цей запит. Спробуй інші ключові слова.";
+        return "У **biology_basics.txt** не знайшов точний фрагмент. Спробуй інші ключові слова.";
       }
 
-      const top = contexts.slice(0, 2);
+      const sentences = [];
+      for (const c of contexts.slice(0, 6)) {
+        const txt = String(c?.text || "");
+        for (const s of splitSentencesSmart(txt)) {
+          const t = s.trim();
+          if (t.length < 35) continue;
+          if (t.length > 260) continue;
+          if (looksLikeNoise(t)) continue;
 
-      const blocks = top.map((c) => {
-        const quote = (c.text || "").trim();
-        const clipped = quote.length > 900 ? quote.slice(0, 900).trim() + "…" : quote;
-        return `**Цитата з biology_basics.txt:**\n“${clipped}”`;
-      });
+          const score = scoreSentence(t, q);
+          if (score <= 0) continue;
 
-      return blocks.join("\n\n");
+          sentences.push({ text: t, score });
+        }
+      }
+
+      sentences.sort((a, b) => b.score - a.score);
+
+      const best = sentences[0]?.text;
+      if (best) return `“${best}”`;
+
+      const fallback = String(contexts[0]?.text || "").trim();
+      const clipped = fallback.length > 400 ? fallback.slice(0, 400).trim() + "…" : fallback;
+      return `“${clipped}”`;
     }
 
     /***********************
@@ -955,17 +949,25 @@
     }
 
     /***********************
-     * Send
+     * Send (FIX double answer)
      ***********************/
     let sendingLock = false;
 
-    sendBtn.onclick = send;
-    promptEl.onkeydown = (e) => {
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        send();
-      }
-    };
+    function attachSendHandlersOnce(){
+      // ✅ прибираємо можливі старі addEventListener (клон кнопки)
+      const newSendBtn = sendBtn.cloneNode(true);
+      sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
+      sendBtn = newSendBtn;
+
+      sendBtn.onclick = send;
+
+      promptEl.onkeydown = (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      };
+    }
 
     async function send(){
       const text = (promptEl.value || "").trim();
@@ -984,10 +986,7 @@
 
         const query = expandQueryForBilingualSearch(text);
 
-        // 1) шукаємо по всій локальній базі
-        let contexts = ragEnabled ? RAG.retrieveTopK(query, 10) : [];
-
-        // 2) ✅ залишаємо ТІЛЬКИ chunks з biology_basics.txt
+        let contexts = ragEnabled ? RAG.retrieveTopK(query, 12) : [];
         contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
 
         const answer = offlineAnswerFromContexts(text, contexts);
@@ -1030,15 +1029,10 @@
         if (!res.ok) throw new Error(`Не вдалося завантажити data/raw/biology_basics.txt (HTTP ${res.status})`);
         const text = await res.text();
 
-        // ✅ підвантажуємо тільки biology_basics.txt
         KB.upsertByTitle("biology_basics.txt", text);
 
         RAG.rebuildIndexFromKB();
         renderKB();
-
-        // ✅ діагностика
-        console.log("BASE:", BASE);
-        console.log("KB docs:", KB.getAll().map(d => ({ title: d.title, len: (d.text || "").length })));
 
         setStatus("Готово");
       } catch (e) {
@@ -1057,6 +1051,8 @@
      * Init
      ***********************/
     async function init(){
+      attachSendHandlersOnce();
+
       renderKB();
       RAG.rebuildIndexFromKB();
       autoResize();
