@@ -460,17 +460,17 @@
         <span>Новий діалог</span>
       </button>
 
-      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
+      <div class="sb-section"><span>База знань</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
       <div class="sb-list" id="kbList"></div>
 
-      <div class="sb-footer">🧬 Консультант з біології • локальна база</div>
+      <div class="sb-footer">🧬 BioConsult • цитати з biology_basics.txt</div>
     </aside>
 
     <main class="main" id="main">
       <header class="topbar">
         <div class="pill" style="cursor:default">🧬 BioConsult</div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 RAG: увімкнено</button>
+          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 Пошук: увімкнено</button>
           <div class="avatar" title="Профіль"></div>
         </div>
       </header>
@@ -485,8 +485,8 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Пояснюю теми простими словами, допомагаю з термінами, процесами та підготовкою до контрольних.
-            Питай будь-що — я відповім.
+            Відповідаю **цитатами** з твого конспекта <b>biology_basics.txt</b>.
+            Можеш використовувати <b>**жирний**</b> у конспекті — він відобразиться жирним у чаті.
           </div>
         </div>
 
@@ -503,28 +503,20 @@
                 <button class="iconbtn" id="closePlusMenu" title="Закрити" aria-label="Закрити" style="width:32px;height:32px;">✕</button>
               </div>
               <div class="pmGrid">
-                <button class="pmBtn" id="pmAddImageFile" type="button">
-                  <div class="l">🖼️ Додати зображення (файл)</div>
-                  <div class="r">jpg/png/webp</div>
-                </button>
-                <button class="pmBtn" id="pmAddImageUrl" type="button">
-                  <div class="l">☁️ Додати зображення з URL</div>
-                  <div class="r">посилання</div>
-                </button>
                 <button class="pmBtn" id="pmAddTextFile" type="button">
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
-                  <div class="r">в базу</div>
+                  <div class="r">в локальну базу</div>
                 </button>
                 <button class="pmBtn" id="pmClearKB" type="button">
-                  <div class="l">🧽 Очистити базу знань</div>
-                  <div class="r">RAG</div>
+                  <div class="l">🧽 Очистити базу</div>
+                  <div class="r">локально</div>
                 </button>
                 <button class="pmBtn" id="pmClearChat" type="button">
                   <div class="l">🧹 Очистити чат</div>
                   <div class="r">скинути</div>
                 </button>
               </div>
-              <div class="tiny">Порада: додай кілька конспектів .txt/.md — відповіді стануть “під твою програму”.</div>
+              <div class="tiny">УВАГА: відповіді беруться тільки з <b>biology_basics.txt</b> (інші файли ігноруються).</div>
             </div>
 
             <div class="composer-row">
@@ -556,32 +548,16 @@
             </div>
 
             <div class="hint">
-              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — матеріали/зображення</span>
+              <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — додати файл</span>
               <span id="statusText">Готово</span>
             </div>
 
             <!-- hidden inputs -->
-            <input id="imageInput" type="file" accept="image/*" hidden />
             <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
           </div>
         </div>
       </div>
     </main>
-  </div>
-
-  <!-- MODAL: Image URL -->
-  <div class="modalOverlay" id="imgModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Додати зображення за URL">
-      <h3>Додати зображення з URL</h3>
-      <p>Встав пряме посилання на зображення (або публічний URL).</p>
-      <div class="row">
-        <input id="imgUrlInput" placeholder="https://..." />
-      </div>
-      <div class="modalActions">
-        <button class="btn" id="cancelImgModal">Скасувати</button>
-        <button class="btn primary" id="addUrlBtn">Додати</button>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -601,26 +577,16 @@
     const plusMenu = document.getElementById('plusMenu');
     const closePlusMenu = document.getElementById('closePlusMenu');
 
-    const pmAddImageFile = document.getElementById('pmAddImageFile');
-    const pmAddImageUrl  = document.getElementById('pmAddImageUrl');
     const pmAddTextFile  = document.getElementById('pmAddTextFile');
     const pmClearChat    = document.getElementById('pmClearChat');
     const pmClearKB      = document.getElementById('pmClearKB');
 
-    const imageInput = document.getElementById('imageInput');
     const textInput  = document.getElementById('textInput');
-
-    const imgModalOverlay = document.getElementById('imgModalOverlay');
-    const imgUrlInput = document.getElementById('imgUrlInput');
-    const cancelImgModal = document.getElementById('cancelImgModal');
-    const addUrlBtn = document.getElementById('addUrlBtn');
 
     const kbList = document.getElementById('kbList');
     const kbCount = document.getElementById('kbCount');
 
     let ragEnabled = true;
-    let pendingImageDataUrl = null;
-    let pendingImageLabel = null;
 
     function setStatus(t){ statusText.textContent = t; }
 
@@ -631,29 +597,31 @@
     promptEl.addEventListener('input', autoResize);
 
     /***********************
+     * Markdown-lite ( **bold** + newlines )
+     ***********************/
+    function escapeHTML(s){
+      return String(s || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function mdLiteToHtml(s){
+      let t = escapeHTML(s);
+      t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); // **bold**
+      t = t.replace(/\n/g, "<br>");                 // newlines
+      return t;
+    }
+
+    /***********************
      * Chat render
      ***********************/
     function addMsg(text, who="user") {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
-      div.textContent = text;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function addImagePreviewMessage({ dataUrl, caption, who="user" }){
-      const div = document.createElement('div');
-      div.className = `msg ${who}`;
-      div.textContent = caption || "Зображення додано:";
-
-      const wrap = document.createElement('div');
-      wrap.className = "imgwrap";
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = "image";
-      wrap.appendChild(img);
-      div.appendChild(wrap);
-
+      div.innerHTML = mdLiteToHtml(text); // ✅ жирний через **
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
@@ -674,9 +642,7 @@
       if (!plusMenu.contains(e.target) && e.target !== plusBtn) closeMenu();
     });
 
-    pmAddImageFile.addEventListener('click', () => { closeMenu(); imageInput.click(); });
     pmAddTextFile.addEventListener('click', () => { closeMenu(); textInput.click(); });
-    pmAddImageUrl.addEventListener('click', () => { closeMenu(); openImgModal(); });
 
     pmClearChat.addEventListener('click', () => {
       closeMenu();
@@ -687,7 +653,7 @@
 
     pmClearKB.addEventListener('click', () => {
       closeMenu();
-      if (!confirm("Очистити базу знань (всі матеріали)?")) return;
+      if (!confirm("Очистити базу знань (локально)?")) return;
       KB.clear();
       RAG.rebuildIndexFromKB();
       renderKB();
@@ -696,37 +662,11 @@
     });
 
     /***********************
-     * Image modal
-     ***********************/
-    function openImgModal(){
-      imgModalOverlay.classList.add("open");
-      imgModalOverlay.setAttribute("aria-hidden","false");
-      imgUrlInput.value = "";
-      setTimeout(() => imgUrlInput.focus(), 0);
-    }
-    function closeImgModal(){
-      imgModalOverlay.classList.remove("open");
-      imgModalOverlay.setAttribute("aria-hidden","true");
-    }
-    cancelImgModal.addEventListener('click', closeImgModal);
-    imgModalOverlay.addEventListener('click', (e) => { if(e.target === imgModalOverlay) closeImgModal(); });
-
-    addUrlBtn.addEventListener('click', async () => {
-      const url = (imgUrlInput.value || "").trim();
-      if(!url) return;
-
-      pendingImageDataUrl = url;
-      pendingImageLabel = "Зображення (URL)";
-      addMsg("✅ Зображення додано. Можеш поставити питання про нього.", "bot");
-      closeImgModal();
-    });
-
-    /***********************
      * RAG toggle
      ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
-      ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
+      ragToggleBtn.textContent = ragEnabled ? "🧠 Пошук: увімкнено" : "🧠 Пошук: вимкнено";
       ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
       setStatus("Готово");
     });
@@ -734,26 +674,6 @@
     /***********************
      * Inputs
      ***********************/
-    imageInput.addEventListener('change', async () => {
-      const file = imageInput.files?.[0];
-      if(!file) return;
-
-      if(!file.type.startsWith("image/")){
-        addMsg("❌ Це не зображення.", "bot");
-        imageInput.value = "";
-        return;
-      }
-
-      const dataUrl = await fileToDataURL(file);
-      pendingImageDataUrl = dataUrl;
-      pendingImageLabel = file.name;
-
-      addImagePreviewMessage({ dataUrl, caption:`Зображення додано: ${file.name}`, who:"user" });
-      addMsg("Ок. Тепер напиши, що саме треба визначити/пояснити на цьому зображенні.", "bot");
-
-      imageInput.value = "";
-    });
-
     textInput.addEventListener('change', async () => {
       const file = textInput.files?.[0];
       if(!file) return;
@@ -788,83 +708,6 @@
       setStatus("Готово");
       closeMenu();
     });
-
-    /***********************
-     * Send (OFFLINE) — RAG + ВІДПОВІДІ ЦИТАТАМИ
-     ***********************/
-    let sendingLock = false;
-
-    sendBtn.onclick = send;
-    promptEl.onkeydown = (e) => {
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        send();
-      }
-    };
-
-    // Якщо конспект англійською, а питання UA/RU — додамо англ. ключі
-    function expandQueryForBilingualSearch(q){
-      const s = (q || "").toLowerCase();
-      const dict = [
-        [/фотосинтез|фотосинтезу|photosynthesis/gi, " photosynthesis "],
-        [/клітина|клетка|cell/gi, " cell "],
-        [/днк|dna/gi, " dna "],
-        [/рнк|rna/gi, " rna "],
-        [/реплікація|репликация|replication/gi, " dna replication "],
-        [/мітоз|митоз|mitosis/gi, " mitosis "],
-        [/мейоз|meiosis/gi, " meiosis "],
-        [/вірус|вирус|virus/gi, " virus "],
-        [/бактерія|бактерия|bacteria/gi, " bacteria "],
-        [/фермент|энзим|enzyme/gi, " enzyme "],
-        [/білок|белок|protein/gi, " protein "],
-        [/мутація|мутация|mutation/gi, " mutation "],
-        [/еволюція|эволюция|evolution/gi, " evolution "],
-        [/дихання|дыхание|respiration/gi, " respiration "],
-        [/хлоропласт|chloroplast/gi, " chloroplast "],
-        [/мітохондрія|митохондрия|mitochondria/gi, " mitochondria "],
-        [/ядро|nucleus/gi, " nucleus "],
-      ];
-
-      let out = " " + s + " ";
-      for (const [re, add] of dict){
-        if (re.test(out)) out += add;
-      }
-      return out.trim();
-    }
-
-    async function send(){
-      const text = (promptEl.value || "").trim();
-      if(!text) return;
-
-      if (sendingLock) return;
-      sendingLock = true;
-
-      try{
-        setStatus("Пишу відповідь…");
-        sendBtn.disabled = true;
-
-        addMsg(text, "user");
-        promptEl.value = "";
-        autoResize();
-
-        const query = expandQueryForBilingualSearch(text);
-        const contexts = ragEnabled ? RAG.retrieveTopK(query, 7) : [];
-        const answer = offlineAnswerFromContexts(text, contexts); // <-- цитати
-
-        addMsg(answer, "bot");
-
-        pendingImageDataUrl = null;
-        pendingImageLabel = null;
-
-        setStatus("Готово");
-      }catch(err){
-        addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
-        setStatus("Помилка");
-      }finally{
-        sendBtn.disabled = false;
-        sendingLock = false;
-      }
-    }
 
     /***********************
      * KB storage (docs)
@@ -921,7 +764,7 @@
       if(docs.length === 0){
         const empty = document.createElement("div");
         empty.className = "sb-item";
-        empty.textContent = "Додай .txt/.md через “+” або поклади файли в data/raw та notebooks";
+        empty.textContent = "Очікую biology_basics.txt у data/raw або додай файл через “+”";
         kbList.appendChild(empty);
         return;
       }
@@ -1041,13 +884,13 @@
         chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
-      function retrieveTopK(question, k=6){
+      function retrieveTopK(question, k=10){
         if(!stats || !chunks.length) return [];
         const qvec = embed(question, stats);
         const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
         scored.sort((a,b)=>b.score-a.score);
 
-        // ✅ Знижений поріг (щоб майже завжди знаходило)
+        // ✅ нижчий поріг
         return scored
           .slice(0, k)
           .filter(x => x.score > 0.03)
@@ -1057,41 +900,118 @@
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
-    // ===============================
-    // ВІДПОВІДІ ЦИТАТАМИ З КОНСПЕКТА
-    // ===============================
+    /***********************
+     * Відповідь цитатами з biology_basics.txt
+     ***********************/
     function offlineAnswerFromContexts(question, contexts) {
       const q = (question || "").trim();
       if (!q) return "Напиши запитання 🙂";
 
       if (!Array.isArray(contexts) || contexts.length === 0) {
-        return "Нічого не знайшов у конспектах по цьому запиту. Спробуй інші ключові слова або додай матеріали.";
+        return "У конспекті **biology_basics.txt** я не знайшов фрагмент під цей запит. Спробуй інші ключові слова.";
       }
 
-      const top = contexts.slice(0, 3); // 3 цитати максимум
+      const top = contexts.slice(0, 2);
 
       const blocks = top.map((c) => {
-        const title = c.title || "джерело";
         const quote = (c.text || "").trim();
         const clipped = quote.length > 900 ? quote.slice(0, 900).trim() + "…" : quote;
-        return `Джерело: ${title}\n“${clipped}”`;
+        return `**Цитата з biology_basics.txt:**\n“${clipped}”`;
       });
 
       return blocks.join("\n\n");
     }
 
     /***********************
-     * Seed KB from repo (txt + notebooks) — FIX paths
-     * (працює і на GitHub Pages у підпапці /REPO/)
+     * Bilingual query expander
+     ***********************/
+    function expandQueryForBilingualSearch(q){
+      const s = (q || "").toLowerCase();
+      const dict = [
+        [/фотосинтез|photosynthesis/gi, " photosynthesis "],
+        [/клітина|cell/gi, " cell "],
+        [/днк|dna/gi, " dna "],
+        [/рнк|rna/gi, " rna "],
+        [/реплікація|replication/gi, " dna replication "],
+        [/мітоз|mitosis/gi, " mitosis "],
+        [/мейоз|meiosis/gi, " meiosis "],
+        [/вірус|virus/gi, " virus "],
+        [/бактерія|bacteria/gi, " bacteria "],
+        [/фермент|enzyme/gi, " enzyme "],
+        [/білок|protein/gi, " protein "],
+        [/мутація|mutation/gi, " mutation "],
+        [/еволюція|evolution/gi, " evolution "],
+        [/дихання|respiration/gi, " respiration "],
+        [/хлоропласт|chloroplast/gi, " chloroplast "],
+        [/мітохондрія|mitochondria/gi, " mitochondria "],
+        [/ядро|nucleus/gi, " nucleus "],
+      ];
+
+      let out = " " + s + " ";
+      for (const [re, add] of dict){
+        if (re.test(out)) out += add;
+      }
+      return out.trim();
+    }
+
+    /***********************
+     * Send
+     ***********************/
+    let sendingLock = false;
+
+    sendBtn.onclick = send;
+    promptEl.onkeydown = (e) => {
+      if(e.key === "Enter" && !e.shiftKey){
+        e.preventDefault();
+        send();
+      }
+    };
+
+    async function send(){
+      const text = (promptEl.value || "").trim();
+      if(!text) return;
+
+      if (sendingLock) return;
+      sendingLock = true;
+
+      try{
+        setStatus("Пишу відповідь…");
+        sendBtn.disabled = true;
+
+        addMsg(text, "user");
+        promptEl.value = "";
+        autoResize();
+
+        const query = expandQueryForBilingualSearch(text);
+
+        // 1) шукаємо по всій локальній базі
+        let contexts = ragEnabled ? RAG.retrieveTopK(query, 10) : [];
+
+        // 2) ✅ залишаємо ТІЛЬКИ chunks з biology_basics.txt
+        contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
+
+        const answer = offlineAnswerFromContexts(text, contexts);
+        addMsg(answer, "bot");
+
+        setStatus("Готово");
+      }catch(err){
+        addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
+        setStatus("Помилка");
+      }finally{
+        sendBtn.disabled = false;
+        sendingLock = false;
+      }
+    }
+
+    /***********************
+     * Seed KB from repo — тільки biology_basics.txt
+     * Авто-підбір base path для GitHub Pages
      ***********************/
     function detectBasePath(){
-      // Якщо GitHub Pages: https://user.github.io/REPO/...
-      // base = /REPO/
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
         return "/" + parts[0] + "/";
       }
-      // Інакше — від кореня домену
       return "/";
     }
     const BASE = detectBasePath();
@@ -1101,56 +1021,22 @@
       return new URL(BASE + path, window.location.origin).href;
     }
 
-    async function seedTextFile(pathFromRepoRoot, title){
-      const url = urlFromBase(pathFromRepoRoot);
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Не вдалося завантажити ${pathFromRepoRoot} (HTTP ${res.status})`);
-      const text = await res.text();
-      KB.upsertByTitle(title, text);
-    }
-
-    function extractTextFromIpynbJson(nb){
-      const cells = Array.isArray(nb?.cells) ? nb.cells : [];
-      const parts = [];
-      for (const c of cells){
-        const cellType = c?.cell_type || "";
-        const src = Array.isArray(c?.source) ? c.source.join("") : (c?.source || "");
-        const clean = String(src || "").trim();
-        if (!clean) continue;
-
-        if (cellType === "markdown"){
-          parts.push(clean);
-        } else if (cellType === "code"){
-          parts.push("```python\n" + clean + "\n```");
-        }
-      }
-      return parts.join("\n\n");
-    }
-
-    async function seedNotebook(pathFromRepoRoot, title){
-      const url = urlFromBase(pathFromRepoRoot);
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Не вдалося завантажити ${pathFromRepoRoot} (HTTP ${res.status})`);
-      const nb = await res.json();
-      const text = extractTextFromIpynbJson(nb);
-      if (text.trim()) KB.upsertByTitle(title, text);
-    }
-
     async function seedKBFromRepoAlways() {
       try {
         setStatus("Оновлюю базу знань…");
 
-        // ВАЖЛИВО: ці шляхи відносно КОРЕНЯ репо
-        await seedTextFile("data/raw/biology_basics.txt", "biology_basics.txt");
+        const url = urlFromBase("data/raw/biology_basics.txt");
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Не вдалося завантажити data/raw/biology_basics.txt (HTTP ${res.status})`);
+        const text = await res.text();
 
-        await seedNotebook("notebooks/01_explore_documents.ipynb", "01_explore_documents.ipynb");
-        await seedNotebook("notebooks/02_chunking_demo.ipynb", "02_chunking_demo.ipynb");
-        await seedNotebook("notebooks/03_web_rag_builder.ipynb", "03_web_rag_builder.ipynb");
+        // ✅ підвантажуємо тільки biology_basics.txt
+        KB.upsertByTitle("biology_basics.txt", text);
 
         RAG.rebuildIndexFromKB();
         renderKB();
 
-        // ✅ Діагностика: що реально в базі
+        // ✅ діагностика
         console.log("BASE:", BASE);
         console.log("KB docs:", KB.getAll().map(d => ({ title: d.title, len: (d.text || "").length })));
 
@@ -1158,29 +1044,13 @@
       } catch (e) {
         addMsg(
           "⚠️ Не зміг завантажити базу знань з репо.\n" +
-          "Перевір файли:\n" +
-          "- data/raw/biology_basics.txt\n" +
-          "- notebooks/01_explore_documents.ipynb\n" +
-          "- notebooks/02_chunking_demo.ipynb\n" +
-          "- notebooks/03_web_rag_builder.ipynb\n\n" +
+          "Перевір файл: data/raw/biology_basics.txt\n\n" +
           "Помилка: " + (e?.message || String(e)),
           "bot"
         );
         console.error(e);
         setStatus("Готово");
       }
-    }
-
-    /***********************
-     * Helpers
-     ***********************/
-    function fileToDataURL(file){
-      return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
     }
 
     /***********************
@@ -1195,7 +1065,7 @@
       await seedKBFromRepoAlways();
 
       if (KB.getAll().length === 0) {
-        addMsg("Додай матеріал через “+” або поклади файли в data/raw та notebooks.", "bot");
+        addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
       }
     }
     init();
