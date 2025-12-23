@@ -3,525 +3,61 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BioConsult — Pastel RAG Chat</title>
-
-  <style>
-    :root{
-      --bg:#f6fbf8;
-      --panel:#ffffffcc;
-      --muted:#7a8f86;
-      --text:#24332d;
-      --line:#e4efe9;
-
-      --accent:#9fc9b4;
-      --accent-soft:#edf6f2;
-      --accent-strong:#86b8a1;
-
-      --shadow: 0 12px 30px rgba(0,0,0,.06);
-      --r:18px;
-      --rLg:26px;
-    }
-
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--text);
-      background:
-        radial-gradient(900px 500px at 80% 0%, #eaf4ef, transparent 60%),
-        radial-gradient(700px 450px at 10% 10%, #f2f8f5, transparent 55%),
-        var(--bg);
-    }
-
-    .app{ height:100dvh; display:grid; grid-template-columns: 320px 1fr; }
-
-    .sidebar{
-      background:rgba(255,255,255,.65);
-      backdrop-filter: blur(14px);
-      border-right:1px solid var(--line);
-      padding:14px 12px;
-      display:flex;
-      flex-direction:column;
-      min-width:280px;
-    }
-    .sb-top{ display:flex; align-items:center; justify-content:space-between; padding:6px 6px 10px; }
-    .brand{ display:flex;align-items:center;gap:10px; font-weight:780; letter-spacing:-.2px; }
-    .logo{
-      width:30px;height:30px;border-radius:10px;
-      background: linear-gradient(135deg, #cfe6dc, #b6d8c9);
-      box-shadow:0 6px 14px rgba(134,184,161,.35);
-    }
-    .iconbtn{
-      width:38px;height:38px;border-radius:999px;
-      border:1px solid transparent;
-      background:transparent;
-      cursor:pointer;
-      display:grid;place-items:center;
-      color:#203127;
-    }
-    .iconbtn:hover{ background:rgba(0,0,0,.05); }
-
-    .newchat{
-      margin:6px;
-      display:flex;align-items:center;gap:10px;
-      padding:10px 12px;
-      border-radius:999px;
-      background:var(--panel);
-      border:1px solid var(--line);
-      cursor:pointer;
-      box-shadow:0 1px 0 rgba(0,0,0,.03);
-    }
-    .badge{
-      width:12px;height:12px;border-radius:50%;
-      background:var(--accent-strong);
-      box-shadow:0 0 0 6px rgba(159,201,180,.25);
-    }
-    .sb-section{
-      margin:10px 6px 6px;
-      font-size:13px;
-      color:var(--muted);
-      display:flex;align-items:center;justify-content:space-between;
-      padding:6px 4px;
-    }
-    .sb-list{ padding:6px; overflow:auto; flex:1; }
-    .sb-item{
-      padding:10px 10px;
-      border-radius:14px;
-      font-size:14px;
-      color:#233528;
-      cursor:pointer;
-      display:flex;align-items:center;gap:10px;
-    }
-    .sb-item:hover{ background:var(--accent-soft); }
-    .sb-footer{
-      border-top:1px solid var(--line);
-      padding:10px 6px 6px;
-      font-size:13px;
-      color:var(--muted);
-      display:flex;align-items:center;gap:8px;
-    }
-
-    .main{ position:relative; display:flex; flex-direction:column; min-width:0; }
-    .topbar{
-      height:64px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:12px 18px;
-      gap:12px;
-    }
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:8px 12px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.75);
-      backdrop-filter: blur(10px);
-      box-shadow:0 1px 0 rgba(0,0,0,.02);
-      font-size:13px;
-      color:#40574e;
-      white-space:nowrap;
-      user-select:none;
-    }
-    .avatar{
-      width:36px;height:36px;border-radius:999px;
-      background:linear-gradient(135deg,#f1faf6,#ffffff);
-      border:1px solid var(--line);
-    }
-
-    .content{
-      flex:1;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      padding:10px 18px 170px;
-      min-height:0;
-    }
-
-    .hero{ width:min(900px, 100%); padding:10px 8px 16px; }
-    .hello{
-      font-size:18px;
-      font-weight:650;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      color:#1f2f26;
-      margin-bottom:8px;
-    }
-    .leafMark{
-      width:22px;height:22px;
-      background: linear-gradient(135deg, #cfe6dc, #9fc9b4);
-      border-radius:7px;
-      transform: rotate(10deg);
-    }
-    .title{
-      font-size:40px;
-      font-weight:820;
-      letter-spacing:-.6px;
-      line-height:1.12;
-      margin:0;
-      color:#1f2e28;
-    }
-    .subtitle{
-      margin-top:10px;
-      max-width:78ch;
-      color:var(--muted);
-      font-size:15px;
-      line-height:1.45;
-    }
-
-    .chatlog{
-      width:min(900px, 100%);
-      margin-top:14px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      max-height:48vh;
-      overflow:auto;
-      padding:0 8px 8px;
-    }
-    .msg{
-      max-width:78ch;
-      padding:12px 14px;
-      border-radius:16px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.75);
-      backdrop-filter: blur(10px);
-      box-shadow:0 1px 0 rgba(0,0,0,.02);
-      white-space:pre-wrap;
-      line-height:1.35;
-      font-size:15px;
-    }
-    .msg.user{
-      align-self:flex-end;
-      background:#eef7f3;
-      border-color:#d6ebe2;
-    }
-    .msg.bot{ align-self:flex-start; }
-
-    .composer-wrap{
-      position:absolute;
-      left:0; right:0; bottom:0;
-      padding:18px;
-      display:flex;
-      justify-content:center;
-      background:linear-gradient(to top, rgba(246,251,248,1), rgba(246,251,248,.7), rgba(246,251,248,0));
-      pointer-events:none;
-    }
-    .composer-area{ width:min(920px, 100%); pointer-events:auto; }
-
-    .composer{
-      border-radius: var(--rLg);
-      border:1px solid #dcebe4;
-      background:rgba(255,255,255,.82);
-      backdrop-filter: blur(14px);
-      box-shadow: var(--shadow);
-      padding:10px;
-      position:relative;
-    }
-
-    .composer-row{ display:flex; align-items:center; gap:10px; }
-
-    .plus{
-      width:38px;height:38px;border-radius:999px;
-      border:1px solid var(--line);
-      background:#fff;
-      cursor:pointer;
-      display:grid;place-items:center;
-      color:#3b4d46;
-      position:relative;
-    }
-    .plus:hover{ background:var(--accent-soft); border-color:#cfe6dc; }
-
-    .input{
-      flex:1;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:8px 10px;
-      border-radius:999px;
-      background:#ffffff;
-      border:1px solid #dcebe4;
-      min-width:0;
-    }
-    .input textarea{
-      width:100%;
-      border:0;
-      outline:none;
-      resize:none;
-      background:transparent;
-      font-size:15px;
-      line-height:1.35;
-      height:24px;
-      max-height:120px;
-      color:var(--text);
-    }
-
-    .tools{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
-
-    .send{
-      width:40px;height:40px;border-radius:999px;
-      border:1px solid #9fc9b4;
-      background: linear-gradient(180deg, #b8dccc, #9fc9b4);
-      color:white;
-      cursor:pointer;
-      display:grid;place-items:center;
-      box-shadow:0 8px 18px rgba(159,201,180,.35);
-    }
-    .send:hover{ filter:brightness(1.03); }
-
-    .chips{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      padding:12px 8px 0;
-    }
-    .chip{
-      background:var(--accent-soft);
-      border:1px solid #cfe6dc;
-      border-radius:999px;
-      padding:10px 14px;
-      font-size:14px;
-      color:#355349;
-      cursor:pointer;
-      user-select:none;
-    }
-    .chip:hover{ background:#e3f1ea; }
-
-    .hint{
-      width:min(920px, 100%);
-      padding:6px 8px 0;
-      color:var(--muted);
-      font-size:12px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-    }
-
-    @media (max-width: 920px){
-      .app{ grid-template-columns: 1fr; }
-      .sidebar{ display:none; }
-      .title{ font-size:34px; }
-    }
-  </style>
+  <title>BioConsult — RAG Chat</title>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="sb-top">
-        <button class="iconbtn" title="Меню" aria-label="Меню">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
-
-        <div class="brand">
-          <span class="logo" aria-hidden="true"></span>
-          <span>BioConsult</span>
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <div class="brandTitle">BioConsult</div>
+          <div class="brandSub">RAG + LLM</div>
         </div>
-
-        <button class="iconbtn" title="Пошук" aria-label="Пошук">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="M20 20l-3.2-3.2"></path>
-          </svg>
-        </button>
       </div>
 
-      <button class="newchat" id="newChatBtn">
-        <span class="badge"></span>
-        <span>Новий діалог</span>
-      </button>
-
-      <div class="sb-section"><span>База знань (RAG)</span><span style="opacity:.7" id="kbCount">data/raw</span></div>
-      <div class="sb-list" id="kbList">
-        <div class="sb-item">Файли беруться з <b>data/raw/*.txt</b> (через бекенд)</div>
+      <div class="card">
+        <div class="row">
+          <button class="btn" id="reindexBtn">🔄 Оновити базу</button>
+          <button class="btn ghost" id="clearBtn">🧹 Очистити чат</button>
+        </div>
+        <div class="row2">
+          <button class="pill" id="ragBtn" aria-pressed="true">🧠 RAG: увімкнено</button>
+          <span class="muted" id="kbStatus">…</span>
+        </div>
+        <div class="tiny" id="hint">
+          Файли беруться з <b>data/raw/*.txt|*.md</b>. Відповідь формує LLM через API.
+        </div>
       </div>
 
-      <div class="sb-footer">🧬 Консультант з біології • твоя база</div>
+      <div class="card">
+        <div class="muted">Швидкі запити</div>
+        <div class="chips" id="chips">
+          <div class="chip">Поясни фотосинтез</div>
+          <div class="chip">Що таке реплікація ДНК?</div>
+          <div class="chip">Різниця вірус і бактерія</div>
+          <div class="chip">Мітоз vs мейоз</div>
+        </div>
+      </div>
     </aside>
 
-    <main class="main" id="main">
+    <main class="main">
       <header class="topbar">
-        <div class="pill" style="cursor:default">🧬 BioConsult</div>
-        <div style="display:flex; align-items:center; gap:10px;">
-          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 RAG: увімкнено</button>
-          <div class="avatar" title="Профіль"></div>
-        </div>
+        <div class="title">🧬 BioConsult</div>
+        <div class="muted" id="status">Готово</div>
       </header>
 
-      <section class="content">
-        <div class="hero">
-          <div class="hello">
-            <span class="leafMark" aria-hidden="true"></span>
-            <span>Привіт! Я BioConsult</span>
-          </div>
-          <h1 class="title">Я відповідаю як ChatGPT, але з твоєї бази</h1>
-          <div class="subtitle">
-            База знань — це файли <b>data/raw/*.txt або .md</b>.  
-            Після додавання/зміни файлів натисни кнопку <b>Reindex</b> (внизу) або виклич /api/reindex.
-          </div>
-        </div>
+      <section class="chat" id="chat"></section>
 
-        <div class="chatlog" id="chatLog" aria-live="polite"></div>
-      </section>
-
-      <div class="composer-wrap">
-        <div class="composer-area">
-          <div class="composer" id="composer">
-            <div class="composer-row">
-              <button class="plus" id="reindexBtn" title="Оновити індекс" aria-label="Оновити індекс">↻</button>
-
-              <div class="input">
-                <textarea id="prompt" placeholder="Запитайте BioConsult…" rows="1"></textarea>
-              </div>
-
-              <div class="tools">
-                <button class="send" id="sendBtn" title="Надіслати" aria-label="Надіслати">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M5 12h14"></path>
-                    <path d="M13 5l7 7-7 7"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="chips" id="chips">
-              <div class="chip">🌿 Поясни фотосинтез</div>
-              <div class="chip">🧬 Що таке реплікація ДНК?</div>
-              <div class="chip">🦠 Різниця вірус/бактерія</div>
-              <div class="chip">🧠 Мітоз vs мейоз</div>
-            </div>
-
-            <div class="hint">
-              <span>Enter — надіслати • Shift+Enter — новий рядок • ↻ — reindex</span>
-              <span id="statusText">Готово</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <footer class="composer">
+        <textarea id="input" rows="1" placeholder="Запитайте… (Enter — надіслати, Shift+Enter — новий рядок)"></textarea>
+        <button class="send" id="send">➤</button>
+      </footer>
     </main>
   </div>
 
-  <script>
-    // ========= CONFIG =========
-    const API_BASE = "http://localhost:8000"; // <-- якщо деплой: постав свій домен бекенду
-
-    // ========= UI refs =========
-    const promptEl = document.getElementById('prompt');
-    const sendBtn  = document.getElementById('sendBtn');
-    const chatLog  = document.getElementById('chatLog');
-    const chips    = document.getElementById('chips');
-    const newChatBtn = document.getElementById('newChatBtn');
-    const statusText = document.getElementById('statusText');
-    const ragToggleBtn = document.getElementById('ragToggleBtn');
-    const reindexBtn = document.getElementById('reindexBtn');
-
-    let ragEnabled = true;
-    let sendingLock = false;
-
-    function setStatus(t){ statusText.textContent = t; }
-
-    function autoResize() {
-      promptEl.style.height = "24px";
-      promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + "px";
-    }
-    promptEl.addEventListener('input', autoResize);
-
-    function addMsg(text, who="user") {
-      const div = document.createElement('div');
-      div.className = `msg ${who}`;
-      div.textContent = text;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    // ========= Actions =========
-    ragToggleBtn.addEventListener('click', () => {
-      ragEnabled = !ragEnabled;
-      ragToggleBtn.textContent = ragEnabled ? "🧠 RAG: увімкнено" : "🧠 RAG: вимкнено";
-      ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
-    });
-
-    chips.addEventListener('click', (e) => {
-      const chip = e.target.closest('.chip');
-      if(!chip) return;
-      promptEl.value = chip.textContent.replace(/\s+/g,' ').trim();
-      promptEl.focus();
-      autoResize();
-    });
-
-    newChatBtn.addEventListener('click', () => {
-      chatLog.innerHTML = "";
-      promptEl.value = "";
-      autoResize();
-      promptEl.focus();
-      setStatus("Готово");
-    });
-
-    reindexBtn.addEventListener('click', async () => {
-      try{
-        setStatus("Reindex…");
-        const res = await fetch(`${API_BASE}/api/reindex`, { method:"POST" });
-        const data = await res.json();
-        addMsg(`✅ Індекс оновлено. chunks=${data.chunks}`, "bot");
-        setStatus("Готово");
-      }catch(err){
-        addMsg("❌ Reindex помилка: " + (err?.message || String(err)), "bot");
-        setStatus("Помилка");
-      }
-    });
-
-    sendBtn.onclick = send;
-    promptEl.onkeydown = (e) => {
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        send();
-      }
-    };
-
-    async function send(){
-      const text = (promptEl.value || "").trim();
-      if(!text) return;
-      if (sendingLock) return;
-      sendingLock = true;
-
-      try{
-        setStatus("Пишу відповідь…");
-        sendBtn.disabled = true;
-
-        addMsg(text, "user");
-        promptEl.value = "";
-        autoResize();
-
-        const res = await fetch(`${API_BASE}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: text, rag: ragEnabled, top_k: 6 })
-        });
-
-        if(!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
-
-        addMsg(data.answer, "bot");
-        setStatus("Готово");
-      }catch(err){
-        addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
-        setStatus("Помилка");
-      }finally{
-        sendBtn.disabled = false;
-        sendingLock = false;
-      }
-    }
-
-    // init
-    autoResize();
-    addMsg("👋 Запусти бекенд і натисни ↻ щоб проіндексувати data/raw. Потім став питання.", "bot");
-  </script>
+  <script src="/main.js"></script>
 </body>
 </html>
