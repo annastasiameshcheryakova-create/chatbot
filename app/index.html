@@ -419,7 +419,7 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Відповідаю короткою **релевантною цитатою** з конспекта <b>biology_basics.txt</b>.
+            Відповідаю цитатами з конспекта <b>biology_basics.txt</b>.
             Підтримую **жирний** через зірочки: <b>**так**</b>.
           </div>
         </div>
@@ -430,7 +430,6 @@
       <div class="composer-wrap">
         <div class="composer-area">
           <div class="composer" id="composer">
-            <!-- PLUS MENU -->
             <div class="plusMenu" id="plusMenu" role="menu" aria-label="Меню додавання">
               <div class="pmTitle">
                 <span>Додати</span>
@@ -486,7 +485,6 @@
               <span id="statusText">Готово</span>
             </div>
 
-            <!-- hidden inputs -->
             <input id="textInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden />
           </div>
         </div>
@@ -495,9 +493,6 @@
   </div>
 
   <script>
-    /***********************
-     * UI refs
-     ***********************/
     const promptEl = document.getElementById('prompt');
     const chatLog  = document.getElementById('chatLog');
     const chips    = document.getElementById('chips');
@@ -519,9 +514,7 @@
     const kbList = document.getElementById('kbList');
     const kbCount = document.getElementById('kbCount');
 
-    // ✅ важливо: спочатку беремо кнопку, потім клонюємо (щоб прибрати подвійні listeners)
     let sendBtn = document.getElementById('sendBtn');
-
     let ragEnabled = true;
 
     function setStatus(t){ statusText.textContent = t; }
@@ -532,9 +525,6 @@
     }
     promptEl.addEventListener('input', autoResize);
 
-    /***********************
-     * Markdown-lite ( **bold** + newlines )
-     ***********************/
     function escapeHTML(s){
       return String(s || "")
         .replaceAll("&", "&amp;")
@@ -546,14 +536,11 @@
 
     function mdLiteToHtml(s){
       let t = escapeHTML(s);
-      t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); // **bold**
-      t = t.replace(/\n/g, "<br>");                 // newlines
+      t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+      t = t.replace(/\n/g, "<br>");
       return t;
     }
 
-    /***********************
-     * Chat render
-     ***********************/
     function addMsg(text, who="user") {
       const div = document.createElement('div');
       div.className = `msg ${who}`;
@@ -562,9 +549,6 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    /***********************
-     * Plus menu
-     ***********************/
     function openMenu(){ plusMenu.classList.add("open"); }
     function closeMenu(){ plusMenu.classList.remove("open"); }
 
@@ -597,9 +581,6 @@
       setStatus("Готово");
     });
 
-    /***********************
-     * RAG toggle
-     ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 Пошук: увімкнено" : "🧠 Пошук: вимкнено";
@@ -607,9 +588,6 @@
       setStatus("Готово");
     });
 
-    /***********************
-     * Inputs
-     ***********************/
     textInput.addEventListener('change', async () => {
       const file = textInput.files?.[0];
       if(!file) return;
@@ -625,9 +603,6 @@
       textInput.value = "";
     });
 
-    /***********************
-     * Chips & new chat
-     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -645,9 +620,6 @@
       closeMenu();
     });
 
-    /***********************
-     * KB storage (docs)
-     ***********************/
     const KB = {
       key: "bioconsult_kb_docs",
 
@@ -739,12 +711,9 @@
       });
     }
 
-    /***********************
-     * RAG in browser (TF-IDF-ish)
-     ***********************/
     const RAG = (() => {
-      let chunks = [];     // {title, text, id, vec}
-      let stats = null;    // {df, N}
+      let chunks = [];
+      let stats = null;
 
       function tokenize(text) {
         return (text || "")
@@ -820,7 +789,7 @@
         chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
-      function retrieveTopK(question, k=12){
+      function retrieveTopK(question, k=14){
         if(!stats || !chunks.length) return [];
         const qvec = embed(question, stats);
         const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
@@ -828,16 +797,13 @@
 
         return scored
           .slice(0, k)
-          .filter(x => x.score > 0.06) // ✅ точніше
+          .filter(x => x.score > 0.045)  // ✅ більше контексту
           .map(x => x.ch);
       }
 
       return { rebuildIndexFromKB, retrieveTopK };
     })();
 
-    /***********************
-     * Helpers for "по суті"
-     ***********************/
     function normalize(s){
       return String(s || "")
         .toLowerCase()
@@ -879,9 +845,7 @@
       return score;
     }
 
-    /***********************
-     * Відповідь: ОДНА цитата по суті (без "Цитата з ...")
-     ***********************/
+    // ✅ 2–4 речення в одному повідомленні (більше інформації)
     function offlineAnswerFromContexts(question, contexts) {
       const q = (question || "").trim();
       if (!q) return "Напиши запитання 🙂";
@@ -890,35 +854,43 @@
         return "У **biology_basics.txt** не знайшов точний фрагмент. Спробуй інші ключові слова.";
       }
 
-      const sentences = [];
-      for (const c of contexts.slice(0, 6)) {
+      const candidates = [];
+      for (const c of contexts.slice(0, 8)) {
         const txt = String(c?.text || "");
         for (const s of splitSentencesSmart(txt)) {
           const t = s.trim();
-          if (t.length < 35) continue;
-          if (t.length > 260) continue;
+          if (t.length < 30) continue;
+          if (t.length > 320) continue;
           if (looksLikeNoise(t)) continue;
 
           const score = scoreSentence(t, q);
           if (score <= 0) continue;
 
-          sentences.push({ text: t, score });
+          candidates.push({ text: t, score });
         }
       }
 
-      sentences.sort((a, b) => b.score - a.score);
+      candidates.sort((a, b) => b.score - a.score);
 
-      const best = sentences[0]?.text;
-      if (best) return `“${best}”`;
+      // унікальні 2–4 речення
+      const picked = [];
+      const seen = new Set();
+      for (const it of candidates) {
+        const key = normalize(it.text).slice(0, 160);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        picked.push(`“${it.text}”`);
+        if (picked.length === 4) break;
+      }
+
+      if (picked.length >= 2) return picked.join("\n\n");
+      if (picked.length === 1) return picked[0];
 
       const fallback = String(contexts[0]?.text || "").trim();
-      const clipped = fallback.length > 400 ? fallback.slice(0, 400).trim() + "…" : fallback;
+      const clipped = fallback.length > 520 ? fallback.slice(0, 520).trim() + "…" : fallback;
       return `“${clipped}”`;
     }
 
-    /***********************
-     * Bilingual query expander
-     ***********************/
     function expandQueryForBilingualSearch(q){
       const s = (q || "").toLowerCase();
       const dict = [
@@ -948,13 +920,10 @@
       return out.trim();
     }
 
-    /***********************
-     * Send (FIX double answer)
-     ***********************/
+    // FIX double answer
     let sendingLock = false;
 
     function attachSendHandlersOnce(){
-      // ✅ прибираємо можливі старі addEventListener (клон кнопки)
       const newSendBtn = sendBtn.cloneNode(true);
       sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
       sendBtn = newSendBtn;
@@ -986,7 +955,7 @@
 
         const query = expandQueryForBilingualSearch(text);
 
-        let contexts = ragEnabled ? RAG.retrieveTopK(query, 12) : [];
+        let contexts = ragEnabled ? RAG.retrieveTopK(query, 14) : [];
         contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
 
         const answer = offlineAnswerFromContexts(text, contexts);
@@ -1002,10 +971,7 @@
       }
     }
 
-    /***********************
-     * Seed KB from repo — тільки biology_basics.txt
-     * Авто-підбір base path для GitHub Pages
-     ***********************/
+    // Seed KB (GitHub Pages safe)
     function detectBasePath(){
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
@@ -1047,9 +1013,6 @@
       }
     }
 
-    /***********************
-     * Init
-     ***********************/
     async function init(){
       attachSendHandlersOnce();
 
