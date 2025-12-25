@@ -33,77 +33,14 @@
         var(--bg);
     }
 
-    .app{ height:100dvh; display:grid; grid-template-columns: 320px 1fr; }
+    /* ✅ один стовпчик, без sidebar */
+    .app{ height:100dvh; display:block; }
 
-    /* Sidebar */
-    .sidebar{
-      background:rgba(255,255,255,.65);
-      backdrop-filter: blur(14px);
-      border-right:1px solid var(--line);
-      padding:14px 12px;
-      display:flex;
-      flex-direction:column;
-      min-width:280px;
-    }
-    .sb-top{ display:flex; align-items:center; justify-content:space-between; padding:6px 6px 10px; }
-    .brand{ display:flex;align-items:center;gap:10px; font-weight:780; letter-spacing:-.2px; }
-    .logo{
-      width:30px;height:30px;border-radius:10px;
-      background: linear-gradient(135deg, #cfe6dc, #b6d8c9);
-      box-shadow:0 6px 14px rgba(134,184,161,.35);
-    }
-    .iconbtn{
-      width:38px;height:38px;border-radius:999px;
-      border:1px solid transparent;
-      background:transparent;
-      cursor:pointer;
-      display:grid;place-items:center;
-      color:#203127;
-    }
-    .iconbtn:hover{ background:rgba(0,0,0,.05); }
-
-    .newchat{
-      margin:6px;
-      display:flex;align-items:center;gap:10px;
-      padding:10px 12px;
-      border-radius:999px;
-      background:var(--panel);
-      border:1px solid var(--line);
-      cursor:pointer;
-      box-shadow:0 1px 0 rgba(0,0,0,.03);
-    }
-    .badge{
-      width:12px;height:12px;border-radius:50%;
-      background:var(--accent-strong);
-      box-shadow:0 0 0 6px rgba(159,201,180,.25);
-    }
-    .sb-section{
-      margin:10px 6px 6px;
-      font-size:13px;
-      color:var(--muted);
-      display:flex;align-items:center;justify-content:space-between;
-      padding:6px 4px;
-    }
-    .sb-list{ padding:6px; overflow:auto; flex:1; }
-    .sb-item{
-      padding:10px 10px;
-      border-radius:14px;
-      font-size:14px;
-      color:#233528;
-      cursor:pointer;
-      display:flex;align-items:center;gap:10px;
-    }
-    .sb-item:hover{ background:var(--accent-soft); }
-    .sb-footer{
-      border-top:1px solid var(--line);
-      padding:10px 6px 6px;
-      font-size:13px;
-      color:var(--muted);
-      display:flex;align-items:center;gap:8px;
-    }
+    /* Sidebar прибрали */
+    .sidebar{ display:none !important; }
 
     /* Main */
-    .main{ position:relative; display:flex; flex-direction:column; min-width:0; }
+    .main{ position:relative; display:flex; flex-direction:column; min-width:0; height:100dvh; }
     .topbar{
       height:64px;
       display:flex;
@@ -193,7 +130,7 @@
       border:1px solid var(--line);
       background:rgba(255,255,255,.75);
       backdrop-filter: blur(10px);
-      box-shadow:0 1px 0 rgba(0,0,0,.02);
+      box-shadow:0  hookup: 1px 0 rgba(0,0,0,.02);
       white-space:pre-wrap;
       line-height:1.35;
       font-size:15px;
@@ -277,23 +214,8 @@
     }
     .send:hover{ filter:brightness(1.03); }
 
-    .chips{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      padding:12px 8px 0;
-    }
-    .chip{
-      background:var(--accent-soft);
-      border:1px solid #cfe6dc;
-      border-radius:999px;
-      padding:10px 14px;
-      font-size:14px;
-      color:#355349;
-      cursor:pointer;
-      user-select:none;
-    }
-    .chip:hover{ background:#e3f1ea; }
+    /* ✅ chips прибрали */
+    .chips{ display:none !important; }
 
     .hint{
       width:min(920px, 100%);
@@ -358,8 +280,6 @@
     }
 
     @media (max-width: 920px){
-      .app{ grid-template-columns: 1fr; }
-      .sidebar{ display:none; }
       .title{ font-size:34px; }
       .plusMenu{ left:18px; right:18px; width:auto; }
     }
@@ -368,38 +288,6 @@
 
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div class="sb-top">
-        <button class="iconbtn" title="Меню" aria-label="Меню">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
-
-        <div class="brand">
-          <span class="logo" aria-hidden="true"></span>
-          <span>BioConsult</span>
-        </div>
-
-        <button class="iconbtn" title="Пошук" aria-label="Пошук">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="M20 20l-3.2-3.2"></path>
-          </svg>
-        </button>
-      </div>
-
-      <button class="newchat" id="newChatBtn">
-        <span class="badge"></span>
-        <span>Новий діалог</span>
-      </button>
-
-      <div class="sb-section"><span>База знань</span><span style="opacity:.7" id="kbCount">0 файлів</span></div>
-      <div class="sb-list" id="kbList"></div>
-
-      <div class="sb-footer">🧬 BioConsult • biology_basics.txt</div>
-    </aside>
-
     <main class="main" id="main">
       <header class="topbar">
         <div class="pill" style="cursor:default">🧬 BioConsult</div>
@@ -440,10 +328,6 @@
                   <div class="l">📄 Додати матеріал (.txt/.md)</div>
                   <div class="r">локально</div>
                 </button>
-                <button class="pmBtn" id="pmClearKB" type="button">
-                  <div class="l">🧽 Очистити базу</div>
-                  <div class="r">локально</div>
-                </button>
                 <button class="pmBtn" id="pmClearChat" type="button">
                   <div class="l">🧹 Очистити чат</div>
                   <div class="r">скинути</div>
@@ -473,14 +357,6 @@
               </div>
             </div>
 
-            <div class="chips" id="chips">
-              <div class="chip">🌿 Що таке фотосинтез?</div>
-              <div class="chip">🧬 Що таке ДНК?</div>
-              <div class="chip">🦠 Різниця вірус/бактерія</div>
-              <div class="chip">🧠 Мітоз vs мейоз</div>
-              <div class="chip">⚡ Що таке АТФ?</div>
-            </div>
-
             <div class="hint">
               <span>Enter — надіслати • Shift+Enter — новий рядок • “+” — додати файл</span>
               <span id="statusText">Готово</span>
@@ -496,8 +372,7 @@
   <script>
     const promptEl = document.getElementById('prompt');
     const chatLog  = document.getElementById('chatLog');
-    const chips    = document.getElementById('chips');
-    const newChatBtn = document.getElementById('newChatBtn');
+    const newChatBtn = null; // sidebar removed
     const statusText = document.getElementById('statusText');
 
     const ragToggleBtn = document.getElementById('ragToggleBtn');
@@ -508,12 +383,8 @@
 
     const pmAddTextFile  = document.getElementById('pmAddTextFile');
     const pmClearChat    = document.getElementById('pmClearChat');
-    const pmClearKB      = document.getElementById('pmClearKB');
 
     const textInput  = document.getElementById('textInput');
-
-    const kbList = document.getElementById('kbList');
-    const kbCount = document.getElementById('kbCount');
 
     let sendBtn = document.getElementById('sendBtn');
     let ragEnabled = true;
@@ -572,16 +443,6 @@
       setStatus("Готово");
     });
 
-    pmClearKB.addEventListener('click', () => {
-      closeMenu();
-      if (!confirm("Очистити базу знань (локально)?")) return;
-      KB.clear();
-      KBIndex.rebuildFromKB();
-      renderKB();
-      addMsg("Базу знань очищено ✅", "bot");
-      setStatus("Готово");
-    });
-
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🔎 Пошук: увімкнено" : "🔎 Пошук: вимкнено";
@@ -596,29 +457,11 @@
 
       KB.addDoc({ title: file.name, text });
       KBIndex.rebuildFromKB();
-      renderKB();
 
-      addMsg(`✅ Додано/оновлено матеріал у базі: ${file.name}`, "bot");
+      addMsg(`✅ Додано/оновлено матеріал: ${file.name}`, "bot");
       setStatus("Готово");
 
       textInput.value = "";
-    });
-
-    chips.addEventListener('click', (e) => {
-      const chip = e.target.closest('.chip');
-      if(!chip) return;
-      promptEl.value = chip.textContent.replace(/\s+/g,' ').trim();
-      promptEl.focus();
-      autoResize();
-    });
-
-    newChatBtn.addEventListener('click', () => {
-      chatLog.innerHTML = "";
-      promptEl.value = "";
-      autoResize();
-      promptEl.focus();
-      setStatus("Готово");
-      closeMenu();
     });
 
     // -------------------------
@@ -660,68 +503,11 @@
         this.upsertByTitle(doc.title, doc.text);
       },
 
-      remove(id){
-        const docs = this.getAll().filter(d => d.id !== id);
-        this.setAll(docs);
-      },
-
       clear(){ this.setAll([]); }
     };
 
-    function renderKB(){
-      const docs = KB.getAll();
-      kbCount.textContent = `${docs.length} файлів`;
-      kbList.innerHTML = "";
-
-      if(docs.length === 0){
-        const empty = document.createElement("div");
-        empty.className = "sb-item";
-        empty.textContent = "Очікую biology_basics.txt у data/raw або додай файл через “+”";
-        kbList.appendChild(empty);
-        return;
-      }
-
-      docs.slice().reverse().forEach(d => {
-        const row = document.createElement("div");
-        row.className = "sb-item";
-        row.title = "Натисни, щоб видалити";
-
-        const dot = document.createElement("span");
-        dot.className = "badge";
-        dot.style.width = "10px";
-        dot.style.height = "10px";
-        dot.style.boxShadow = "none";
-        row.appendChild(dot);
-
-        const name = document.createElement("div");
-        name.textContent = d.title;
-        name.style.flex = "1";
-        row.appendChild(name);
-
-        const del = document.createElement("span");
-        del.textContent = "🗑️";
-        del.style.opacity = ".75";
-        row.appendChild(del);
-
-        row.addEventListener("click", () => {
-          if(!confirm(`Видалити "${d.title}" з бази?`)) return;
-          KB.remove(d.id);
-          KBIndex.rebuildFromKB();
-          renderKB();
-          addMsg(`✅ Видалено з бази: ${d.title}`, "bot");
-        });
-
-        kbList.appendChild(row);
-      });
-    }
-
     // -------------------------
     // SMART ANSWER INDEX (groups)
-    // expects file formatted like:
-    // GРУПА ЗАПИТУ: ...
-    // Ключові слова: ...
-    // Відповідь:
-    // ...
     // -------------------------
     const UA_STOP = new Set([
       "що","це","та","і","й","або","але","в","у","на","до","від","для","про","як",
@@ -752,6 +538,7 @@
       const groups = [];
       let cur = null;
       let mode = "none"; // none | keys | ans
+
       for (const raw of lines){
         const line = raw.trimEnd();
 
@@ -767,7 +554,6 @@
         const mK = line.match(/^Ключові слова:\s*(.+)\s*$/i);
         if (mK){
           cur.keysLine = mK[1].trim();
-          // split by comma, also keep phrases
           cur.keys = cur.keysLine.split(",")
             .map(x => normalize(x))
             .map(x => x.trim())
@@ -782,18 +568,15 @@
         }
 
         if (mode === "ans"){
-          cur.answer += (cur.answer ? "\n" : "") + raw; // keep original formatting
+          cur.answer += (cur.answer ? "\n" : "") + raw;
         }
       }
       if (cur) groups.push(cur);
 
-      // Cleanup: trim answers, keep length (don’t re-write)
       for (const g of groups){
         g.answer = String(g.answer || "").replace(/\s+$/g, "");
         g.titleNorm = normalize(g.title);
         g.keysNorm = g.keys.map(k => normalize(k));
-        g.answerNorm = normalize(g.answer);
-        // token set for scoring
         g.keyTokenSet = new Set();
         for (const k of g.keysNorm){
           for (const tok of tokensOf(k)) g.keyTokenSet.add(tok);
@@ -810,29 +593,23 @@
       let best = null;
 
       for (const g of groups){
-        // 1) Phrase hits (full keyword phrases)
         let phraseHits = 0;
         for (const phrase of g.keysNorm){
           if (!phrase) continue;
-          if (phrase.length < 3) continue;
           if (qNorm.includes(phrase)) phraseHits += 3;
         }
 
-        // 2) Token overlap
         let tokHits = 0;
         for (const t of qToks){
           if (g.keyTokenSet.has(t)) tokHits += 1;
         }
 
-        // 3) Small bonus if title overlaps (often strong)
         let titleBonus = 0;
         for (const t of qToks){
           if (g.titleNorm.includes(t)) titleBonus += 0.5;
         }
 
         const score = phraseHits + tokHits + titleBonus;
-
-        // require some relevance (avoid random)
         if (score < 2) continue;
 
         if (!best || score > best.score){
@@ -843,9 +620,6 @@
       return best?.group || null;
     }
 
-    // If group answer is long, we still return ONLY that group (as you asked),
-    // but we can optionally shorten to 1-3 sentences for tiny queries (e.g. "рибосоми").
-    // Rule: if query looks like "one term", return first 1–2 sentences/lines.
     function smartTrimAnswerForShortQuery(question, answer){
       const qToks = tokensOf(question);
       const q = normalize(question);
@@ -857,7 +631,6 @@
 
       if (!looksLikeSingleTerm) return answer;
 
-      // Take first 1–2 sentences OR first 2 non-empty lines
       const lines = String(answer || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
       if (!lines.length) return answer;
 
@@ -867,17 +640,12 @@
       if (sentences.length >= 2) return sentences.slice(0, 2).join(" ");
       if (sentences.length === 1) return sentences[0];
 
-      // fallback: 2 lines
       return lines.slice(0, 2).join("\n");
     }
 
-    // -------------------------
-    // KBIndex: builds group index from biology_basics.txt
-    // -------------------------
     const KBIndex = (() => {
       let groups = [];
       let ready = false;
-      let lastSourceTitle = null;
 
       function rebuildFromKB(){
         const docs = KB.getAll();
@@ -885,27 +653,22 @@
         if (!bio){
           groups = [];
           ready = false;
-          lastSourceTitle = null;
           return;
         }
         groups = parseGroupsFromText(bio.text);
         ready = groups.length > 0;
-        lastSourceTitle = bio.title;
       }
 
       function answer(question){
         if (!ready || !groups.length){
-          return "⚠️ У базі немає структурованих блоків. Переконайся, що у **biology_basics.txt** є формат:\nГРУПА ЗАПИТУ / Ключові слова / Відповідь.";
+          return "⚠️ У базі немає структурованих блоків. Додай формат:\nГРУПА ЗАПИТУ / Ключові слова / Відповідь.";
         }
-
         const g = pickBestGroup(question, groups);
         if (!g){
-          return "У **biology_basics.txt** не знайшов релевантної **групи запиту**. Спробуй інші ключові слова (наприклад: «що таке …», «визначення …», «етапи …»).";
+          return "У **biology_basics.txt** не знайшов релевантної **групи запиту**. Спробуй інші ключові слова.";
         }
-
         const raw = String(g.answer || "").trim();
-        const trimmed = smartTrimAnswerForShortQuery(question, raw);
-        return trimmed || "⚠️ Знайшов групу, але відповідь порожня.";
+        return smartTrimAnswerForShortQuery(question, raw) || "⚠️ Знайшов групу, але відповідь порожня.";
       }
 
       return { rebuildFromKB, answer };
@@ -914,7 +677,6 @@
     // -------------------------
     // UI send
     // -------------------------
-    // FIX double answer
     let sendingLock = false;
 
     function attachSendHandlersOnce(){
@@ -947,17 +709,14 @@
         promptEl.value = "";
         autoResize();
 
-        // If search off => refuse (you can change behavior)
         if (!ragEnabled){
           addMsg("🔎 Пошук вимкнено. Увімкни його, щоб відповідати з бази.", "bot");
           setStatus("Готово");
           return;
         }
 
-        // ONLY answer from biology_basics.txt groups
         const answer = KBIndex.answer(text);
         addMsg(answer, "bot");
-
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -995,9 +754,7 @@
         const text = await res.text();
 
         KB.upsertByTitle("biology_basics.txt", text);
-
         KBIndex.rebuildFromKB();
-        renderKB();
 
         setStatus("Готово");
       } catch (e) {
@@ -1014,31 +771,24 @@
 
     async function init(){
       attachSendHandlersOnce();
-
-      renderKB();
       KBIndex.rebuildFromKB();
       autoResize();
       setStatus("Готово");
 
       await seedKBFromRepoAlways();
 
-      if (KB.getAll().length === 0) {
+      const docs = KB.getAll();
+      const bio = docs.find(d => d.title === "biology_basics.txt");
+      if (!bio){
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
         return;
       }
 
-      // Friendly warning if file exists but not structured
-      const docs = KB.getAll();
-      const bio = docs.find(d => d.title === "biology_basics.txt");
-      if (bio){
-        const hasGroups = /ГРУПА ЗАПИТУ:/i.test(bio.text) && /Ключові слова:/i.test(bio.text) && /Відповідь:/i.test(bio.text);
-        if (!hasGroups){
-          addMsg(
-            "⚠️ У **biology_basics.txt** не бачу структури для пошуку.\n" +
-            "Файл має містити блоки: **ГРУПА ЗАПИТУ / Ключові слова / Відповідь**.",
-            "bot"
-          );
-        }
+      const hasGroups = /ГРУПА ЗАПИТУ:/i.test(bio.text) && /Ключові слова:/i.test(bio.text) && /Відповідь:/i.test(bio.text);
+      if (!hasGroups){
+        addMsg("⚠️ У **biology_basics.txt** не бачу структури. Додай блоки: **ГРУПА ЗАПИТУ / Ключові слова / Відповідь**.", "bot");
+      } else {
+        addMsg("Готово ✅ Питай — відповім з **biology_basics.txt**.", "bot");
       }
     }
     init();
