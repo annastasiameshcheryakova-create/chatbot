@@ -736,8 +736,7 @@
 
       const suffixes = [
         "ями","ами","ові","еві","єві","ого","ому","ими","ій","їй","ою","ею",
-        "ах","ях","ів","їв","ев","єв","ом","ем","ам","ям","ою","ею",
-        "у","ю","а","я","і","ї","е","о"
+        "ах","ях","ів","їв","ев","єв","ом","ем","ам","ям","у","ю","а","я","і","ї","е","о"
       ];
 
       for (const sfx of suffixes){
@@ -778,134 +777,179 @@
       return cleaned.join("\n").replace(/^\s+|\s+$/g, "");
     }
 
+    function splitSentencesSmart(text){
+      const t = String(text || "")
+        .replace(/\r/g, " ")
+        .replace(/\n+/g, " ")
+        .trim();
+      if (!t) return [];
+      return t.split(/(?<=[.!?…])\s+/);
+    }
+
+    // 1) дуже короткий запит -> 1 речення
+    // 2) "що таке / визначення" -> 1-2 речення
+    // 3) "як відбувається / схема / етапи" -> 2-8 речень
+    function smartTrimAnswer(question, answer){
+      const raw = sanitizeAnswerText(answer || "");
+      if(!raw) return "";
+
+      const q = String(question || "");
+      const qToks = tokensOf(q);
+
+      const wantsDefinition = /(що таке|визнач|дати визначення)/i.test(q);
+      const wantsSteps = /(як відбува|етап|фаз|схем|порядок|механізм)/i.test(q);
+
+      const sents = splitSentencesSmart(raw).filter(x=>x.trim().length>0);
+
+      if (qToks.length <= 2 && !wantsSteps){
+        return (sents[0] || raw).trim();
+      }
+
+      if (wantsDefinition && !wantsSteps){
+        return (sents.slice(0, 2).join(" ") || raw).trim();
+      }
+
+      if (wantsSteps){
+        return (sents.slice(0, Math.min(8, Math.max(2, sents.length))).join(" ") || raw).trim();
+      }
+
+      return (sents.slice(0, Math.min(4, Math.max(2, sents.length))).join(" ") || raw).trim();
+    }
+
     // ----------------------------
-    // ✅ ІНДЕКС ПО "ГРУПАХ ЗАПИТІВ"
-    // Формат у biology_basics.txt:
-    // [ГРУПА] Назва
-    // Ключові слова: ...
-    // Відповідь:
-    // ...
-    // [/ГРУПА]
+    // ✅ ПАРСЕР: або [ГРУПА], або автосекції з ###
     // ----------------------------
     function parseGroupsFromText(text){
       const src = String(text || "");
       const lines = src.split(/\r?\n/);
 
-      const groups = [];
+      // --- 1) пробуємо [ГРУПА] формат
+      let groups = [];
       let cur = null;
-      let mode = "none"; // keys | answer
+      let mode = "none";
 
-      function pushCur(){
-        if (!cur) return;
+      function finalizeCur(){
+        if(!cur) return;
         cur.title = String(cur.title || "").trim();
         cur.titleNorm = normalize(cur.title);
         cur.keysRaw = cur.keysRaw || [];
         cur.keysNorm = cur.keysRaw.map(k => normalize(k)).filter(Boolean);
         cur.answer = sanitizeAnswerText(cur.answer || "");
 
-        // токени з ключів + назви групи
         cur.keyTokenSet = new Set();
         for (const k of cur.keysNorm){
           for (const tok of tokensOf(k)) cur.keyTokenSet.add(tok);
         }
-        for (const tok of tokensOf(cur.titleNorm)){
-          cur.keyTokenSet.add(tok);
-        }
+        for (const tok of tokensOf(cur.titleNorm)) cur.keyTokenSet.add(tok);
 
         groups.push(cur);
         cur = null;
         mode = "none";
       }
 
-      for (let i=0; i<lines.length; i++){
-        const line = lines[i];
-
-        // START
+      for (const line of lines){
         const mStart = line.match(/^\s*\[ГРУПА\]\s*(.+?)\s*$/i);
         if (mStart){
-          pushCur();
+          finalizeCur();
           cur = { title: mStart[1], keysRaw: [], answer: "" };
           mode = "none";
           continue;
         }
-
-        // END
         const mEnd = line.match(/^\s*\[\/ГРУПА\]\s*$/i);
         if (mEnd){
-          pushCur();
+          finalizeCur();
           continue;
         }
+        if(!cur) continue;
 
-        if (!cur) continue;
-
-        // Keys
         const mKeys = line.match(/^\s*ключові\s*слова\s*:\s*(.+)\s*$/i);
         if (mKeys){
           mode = "keys";
-          const list = mKeys[1].split(",").map(x=>x.trim()).filter(Boolean);
-          cur.keysRaw.push(...list);
+          cur.keysRaw.push(...mKeys[1].split(",").map(x=>x.trim()).filter(Boolean));
           continue;
         }
-
-        // Answer
         const mAns = line.match(/^\s*відповідь\s*:\s*$/i);
         if (mAns){
           mode = "answer";
           continue;
         }
 
-        // Collect
         if (mode === "keys"){
           if (line.trim()==="") continue;
-          const list = line.split(",").map(x=>x.trim()).filter(Boolean);
-          cur.keysRaw.push(...list);
+          cur.keysRaw.push(...line.split(",").map(x=>x.trim()).filter(Boolean));
           continue;
         }
-
         if (mode === "answer"){
           cur.answer += line + "\n";
           continue;
         }
       }
+      finalizeCur();
 
-      pushCur();
+      // якщо групи є — ок
+      if (groups.length > 0) return groups;
+
+      // --- 2) FALLBACK: автосекції по "### ..."
+      groups = [];
+      let sec = null;
+
+      function finalizeSec(){
+        if(!sec) return;
+        sec.title = String(sec.title || "").trim();
+        sec.titleNorm = normalize(sec.title);
+        sec.answer = sanitizeAnswerText(sec.answer || "");
+
+        const keys = new Set();
+        // ключі з заголовка
+        for (const tok of tokensOf(sec.title)) keys.add(tok);
+
+        // ключі з "Ключові поняття:"
+        if (sec.keyLine){
+          const list = sec.keyLine.split(":").slice(1).join(":");
+          for (const part of list.split(",")){
+            for (const tok of tokensOf(part)) keys.add(tok);
+          }
+        }
+
+        sec.keyTokenSet = keys;
+        sec.keysNorm = []; // не треба
+        groups.push(sec);
+        sec = null;
+      }
+
+      for (let i=0; i<lines.length; i++){
+        const line = lines[i];
+
+        const h = line.match(/^\s*#{2,4}\s*\*?\*?\s*(.+?)\s*$/); // ### ...
+        if (h){
+          finalizeSec();
+          sec = { title: h[1], answer: "", keyLine: "" };
+          continue;
+        }
+
+        if (!sec){
+          // якщо файл без ### — зробимо одну секцію
+          sec = { title: "Загальний конспект", answer: "", keyLine: "" };
+        }
+
+        if (/^\s*\*\*ключові поняття/i.test(line) || /^\s*ключові поняття/i.test(line)){
+          sec.keyLine = line;
+          // але сам рядок теж лишаємо в тексті (не втрачаємо зміст)
+          sec.answer += line + "\n";
+          continue;
+        }
+
+        sec.answer += line + "\n";
+      }
+      finalizeSec();
+
       return groups;
-    }
-
-    function smartTrimAnswerForShortQuery(question, answer){
-      const q = normalize(question);
-      const raw = String(answer || "").trim();
-      if (!raw) return "";
-
-      const qToks = tokensOf(q);
-
-      const wantsDefinition = /(що таке|визнач|дати визначення|define)/i.test(question);
-      const wantsSteps = /(етап|фаз|схем|як відбува|порядок|механізм)/i.test(question);
-
-      // короткий запит = 1 речення
-      if (qToks.length <= 2 && !wantsSteps) {
-        const one = raw.split(/(?<=[.!?…])\s+/)[0] || raw;
-        return one.trim();
-      }
-
-      // "схема/етапи" = 2-8 речень
-      if (wantsSteps || wantsDefinition){
-        const sents = raw.split(/(?<=[.!?…])\s+/).filter(x=>x.trim().length>0);
-        const take = Math.min(Math.max(2, sents.length >= 8 ? 8 : sents.length), 8);
-        return sents.slice(0, take).join(" ").trim();
-      }
-
-      // звичайне питання = 2-4 речення
-      const sents = raw.split(/(?<=[.!?…])\s+/).filter(x=>x.trim().length>0);
-      return sents.slice(0, Math.min(4, Math.max(2, sents.length))).join(" ").trim();
     }
 
     function pickBestGroup(groups, question){
       const qNorm = normalize(question);
       const qToks = tokensOf(qNorm);
       const qSet = new Set(qToks);
-
-      // якщо немає нормальних токенів — беремо першу групу не можна
       if (qToks.length === 0) return null;
 
       let best = null;
@@ -914,39 +958,18 @@
         let hits = 0;
 
         for (const t of qSet){
-          if (g.keyTokenSet.has(t)) hits += 3;
+          if (g.keyTokenSet && g.keyTokenSet.has(t)) hits += 3;
         }
 
-        // фразове співпадіння (пряме + "стеми")
-        let phraseHits = 0;
+        if (g.titleNorm && qNorm.includes(g.titleNorm)) hits += 2;
 
-        for (const phrase of g.keysNorm){
-          if (!phrase) continue;
-          if (phrase.length < 3) continue;
-          if (qNorm.includes(phrase)) phraseHits += 3;
-        }
-
-        for (const phrase of g.keysNorm){
-          const ptoks = tokensOf(phrase);
-          if (ptoks.length < 2) continue;
-          let ok = true;
-          for (const t of ptoks){
-            if (!qSet.has(t)) { ok = false; break; }
-          }
-          if (ok) phraseHits += 3;
-        }
-
-        // якщо назва групи згадується
-        if (g.titleNorm && qNorm.includes(g.titleNorm)) phraseHits += 2;
-
-        const score = hits + phraseHits;
+        const score = hits;
 
         if (!best || score > best.score){
           best = { g, score };
         }
       }
 
-      // поріг, щоб не відповідати "аби що"
       if (!best || best.score < 3) return null;
       return best.g;
     }
@@ -965,16 +988,15 @@
       }
 
       function answer(question){
-        if (!groups.length) return "Додай **biology_basics.txt** (формат з [ГРУПА] ... [/ГРУПА]).";
+        if (!groups.length) return "Немає даних: додай **biology_basics.txt** у data/raw або через “+”.";
 
         const g = pickBestGroup(groups, question);
         if (!g){
-          return "У **biology_basics.txt** не знайшов релевантної групи. Спробуй інші ключові слова.";
+          return "У **biology_basics.txt** не знайшов релевантної секції. Спробуй інші ключові слова.";
         }
 
-        const raw = sanitizeAnswerText(g.answer || "");
-        const trimmed = smartTrimAnswerForShortQuery(question, raw);
-        return sanitizeAnswerText(trimmed) || "⚠️ Знайшов групу, але відповідь порожня.";
+        const trimmed = smartTrimAnswer(question, g.answer || "");
+        return trimmed || "⚠️ Знайшов секцію, але відповідь порожня.";
       }
 
       return { rebuildFromKB, answer };
@@ -1019,7 +1041,6 @@
           return;
         }
 
-        // Відповідь тільки з biology_basics.txt по "групах"
         const answer = KBIndex.answer(text);
         addMsg(answer, "bot");
 
@@ -1088,8 +1109,7 @@
       if (KB.getAll().length === 0) {
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
       } else {
-        // маленьке привітання
-        addMsg("Готово ✅ Питай будь-що з біології — відповім з **biology_basics.txt**.", "bot");
+        addMsg("Готово ✅ Питай — відповім з **biology_basics.txt**.", "bot");
       }
     }
     init();
