@@ -35,7 +35,6 @@
 
     .app{ height:100dvh; display:grid; grid-template-columns: 320px 1fr; }
 
-    /* Sidebar */
     .sidebar{
       background:rgba(255,255,255,.65);
       backdrop-filter: blur(14px);
@@ -102,7 +101,6 @@
       display:flex;align-items:center;gap:8px;
     }
 
-    /* Main */
     .main{ position:relative; display:flex; flex-direction:column; min-width:0; }
     .topbar{
       height:64px;
@@ -175,7 +173,6 @@
       line-height:1.45;
     }
 
-    /* Chat */
     .chatlog{
       width:min(900px, 100%);
       margin-top:14px;
@@ -205,7 +202,6 @@
     }
     .msg.bot{ align-self:flex-start; }
 
-    /* Composer */
     .composer-wrap{
       position:absolute;
       left:0; right:0; bottom:0;
@@ -306,7 +302,6 @@
       flex-wrap:wrap;
     }
 
-    /* Plus menu */
     .plusMenu{
       position:absolute;
       left:12px;
@@ -474,6 +469,7 @@
             </div>
 
             <div class="chips" id="chips">
+              <div class="chip">🌿 Що таке біологія?</div>
               <div class="chip">🌿 Поясни фотосинтез</div>
               <div class="chip">🧬 Що таке реплікація ДНК?</div>
               <div class="chip">🦠 Різниця вірус/бактерія</div>
@@ -712,10 +708,10 @@
     }
 
     /***************************************************************
-     * ✅ KEYWORD-FIRST RAG: підбір релевантних фрагментів
-     * - Шукає по ключових словах (через токени) + простий TF-IDF
-     * - Повертає тільки "по ділу": фільтрує слабкі збіги
-     * - Відповідає 2–5 реченнями, зібраними навколо збігів
+     * ✅ Пошук по ключовим словам користувача (людська логіка)
+     * - Для коротких запитів типу "що таке біологія" працює стабільно
+     * - Додає синоніми/варіанти (укр/рос/англ) для кращого збігу
+     * - Відсікає "не по ділу" динамічними порогами
      ***************************************************************/
     const RAG = (() => {
       let chunks = [];
@@ -729,33 +725,69 @@
           .trim();
       }
 
+      const STOP = new Set([
+        // UA
+        "і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або","чи","то","ті","цей","ця","це","ці","який","яка","яке","які",
+        // RU
+        "и","й","да","а","но","что","это","как","в","во","на","до","с","со","за","про","для","от","при","или","ли","то","этот","эта","эти","какой","какая","какое","какие",
+        // EN
+        "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were"
+      ]);
+
+      // простий словник синонімів/варіантів
+      const SYN = [
+        { re: /\bбіологія\b/gi, add: ["biology","биология"] },
+        { re: /\bанатомія\b/gi, add: ["anatomy","анатомия"] },
+        { re: /\bекологія\b/gi, add: ["ecology","экология"] },
+        { re: /\bклітина\b/gi, add: ["cell","клетка"] },
+        { re: /\bднк\b/gi, add: ["dna","дезоксирибонуклеїнова","дезоксирибонуклеиновая"] },
+        { re: /\bрнк\b/gi, add: ["rna","рибонуклеїнова","рибонуклеиновая"] },
+        { re: /\bфотосинтез\b/gi, add: ["photosynthesis"] },
+        { re: /\bмітоз\b/gi, add: ["mitosis"] },
+        { re: /\bмейоз\b/gi, add: ["meiosis"] },
+        { re: /\bбактер(ія|ии|ії)\b/gi, add: ["bacteria"] },
+        { re: /\bвірус(и|ів)?\b/gi, add: ["virus","viruses"] },
+      ];
+
       function tokenize(text){
-        const stop = new Set([
-          "і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або",
-          "the","a","an","and","or","to","of","in","on","for","with","is","are"
-        ]);
         return normalize(text)
           .split(" ")
           .filter(Boolean)
           .filter(w => w.length >= 3)
-          .filter(w => !stop.has(w));
+          .filter(w => !STOP.has(w));
       }
 
-      // Беремо "ключові слова" із запиту: унікальні, до 14 шт
-      function extractKeywords(question){
-        const toks = tokenize(question);
-        const uniq = [];
+      // ключові слова саме "людини", але з підсиленням синонімів
+      function extractKeywordsHuman(question){
+        const base = String(question || "");
+        let expanded = " " + base + " ";
+        for (const s of SYN){
+          if (s.re.test(expanded)){
+            expanded += " " + s.add.join(" ") + " ";
+          }
+        }
+
+        const toks = tokenize(expanded);
+
+        // унікальні, до 16
+        const out = [];
         const seen = new Set();
         for (const t of toks){
           if (seen.has(t)) continue;
           seen.add(t);
-          uniq.push(t);
-          if (uniq.length >= 14) break;
+          out.push(t);
+          if (out.length >= 16) break;
         }
-        return uniq;
+
+        // якщо запит дуже короткий і вийшло 0 — беремо хоч 1 слово без стопів (fallback)
+        if (out.length === 0){
+          const raw = normalize(base).split(" ").filter(Boolean).filter(w => w.length >= 3);
+          if (raw[0]) out.push(raw[0]);
+        }
+
+        return out;
       }
 
-      // Чанк по заголовках/параграфах краще, але тут лишимо простий
       function chunkText(text, chunkSize=900, overlap=120){
         const clean = (text || "").replace(/\s+/g, " ").trim();
         if (!clean) return [];
@@ -818,40 +850,47 @@
         for (const ch of chunks) ch.vec = tfidfVec(ch.text, stats);
       }
 
-      // ⭐ Ключове: rank = (збіг ключових слів) + cosine(tf-idf)
+      // головна функція пошуку
       function retrieve(question, topK=8){
         if (!stats || !chunks.length) return [];
 
-        const keywords = extractKeywords(question);
+        const keywords = extractKeywordsHuman(question);
         const qVec = tfidfVec(question, stats);
+
+        // динамічні пороги: короткий запит -> м’якші умови
+        const shortQuery = keywords.length <= 2;
 
         const scored = chunks.map(ch => {
           const norm = normalize(ch.text);
+
           let hits = 0;
           for (const k of keywords){
-            // точне слово або частина слова
             if (norm.includes(k)) hits++;
           }
 
           const sim = cosine(qVec, ch.vec);
 
-          // сильніше цінуємо прямі збіги (по ключових словах)
-          const score = (hits * 0.9) + (sim * 1.4);
+          // score: ключові слова домінують, TF-IDF допомагає
+          const score = (hits * 1.2) + (sim * 1.1);
 
           return { ch, score, hits, sim };
         });
 
         scored.sort((a,b)=> b.score - a.score);
 
-        // ✅ відсікаємо "не по ділу":
-        // - або мінімум 2 ключових збіги
-        // - або дуже високий sim
-        const filtered = scored.filter(x => x.hits >= 2 || x.sim >= 0.18);
+        // фільтр "по ділу"
+        const filtered = scored.filter(x => {
+          if (shortQuery) return (x.hits >= 1) || (x.sim >= 0.10);
+          return (x.hits >= 2) || (x.sim >= 0.18);
+        });
 
-        return filtered.slice(0, topK).map(x => x.ch);
+        // якщо раптом нічого не пройшло — беремо просто topK (щоб не було “не знайшов” дарма)
+        const base = (filtered.length ? filtered : scored).slice(0, topK).map(x => x.ch);
+
+        return base;
       }
 
-      return { rebuildIndexFromKB, retrieve };
+      return { rebuildIndexFromKB, retrieve, extractKeywordsHuman, normalize };
     })();
 
     function splitSentencesSmart(text){
@@ -876,15 +915,13 @@
       for (const k of keywords){
         if (s.includes(k)) score += 2;
       }
-      // Бонус за "визначення/процес" (часто саме те, що треба)
-      if (/(це|процес|відбувається|полягає|складається|забезпечує|результат)/i.test(sentence)) score += 1;
+      if (/(це|процес|відбувається|полягає|складається|забезпечує|результат|вивчає|досліджує)/i.test(sentence)) score += 1;
       return score;
     }
 
-    // ✅ Відповідь "тільки по ділу":
-    // - беремо топ 2 чанки
-    // - витягаємо 2–5 речень з найбільшим збігом ключових слів
-    // - якщо збіг слабкий -> чесно кажемо, що нема
+    // ✅ відповідь тільки по суті:
+    // - беремо речення з найбільшими збігами ключових слів
+    // - якщо короткий запит — достатньо 1 ключового збігу
     function answerFromKB(question, contexts){
       const q = String(question || "").trim();
       if (!q) return "Напиши запитання 🙂";
@@ -893,29 +930,25 @@
         return "У **biology_basics.txt** не знайшов релевантного фрагмента. Спробуй інші ключові слова.";
       }
 
-      // ключові слова запиту
-      const keywords = (() => {
-        const stop = new Set(["і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або"]);
-        return q.toLowerCase()
-          .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-          .split(/\s+/)
-          .filter(Boolean)
-          .filter(w => w.length >= 3 && !stop.has(w))
-          .slice(0, 14);
-      })();
+      const keywords = RAG.extractKeywordsHuman(q);
+      const shortQuery = keywords.length <= 2;
 
       const candidates = [];
 
-      // беремо 2 найкращі фрагменти, щоб не "розмазувало" відповідь
-      for (const c of contexts.slice(0, 2)){
+      // беремо 3 фрагменти, але вибір речень робимо жорстко "по ділу"
+      for (const c of contexts.slice(0, 3)){
         const sentences = splitSentencesSmart(c.text);
         for (let i = 0; i < sentences.length; i++){
           const s = (sentences[i] || "").trim();
           if (looksLikeNoise(s)) continue;
-          if (s.length > 380) continue;
+          if (s.length > 420) continue;
 
           const score = keywordScore(s, keywords);
-          if (score <= 0) continue;
+          if (shortQuery) {
+            if (score <= 0) continue; // для коротких — 1 збіг ок
+          } else {
+            if (score <= 2) continue; // для довших — вже треба “по суті”
+          }
 
           candidates.push({ s, score, idx:i, from:c.text });
         }
@@ -923,12 +956,11 @@
 
       candidates.sort((a,b)=> b.score - a.score);
 
-      // беремо 2–5 речень, але уникаємо повторів
       const picked = [];
       const seen = new Set();
 
       function addUnique(sentence){
-        const key = sentence.toLowerCase().slice(0, 200);
+        const key = sentence.toLowerCase().slice(0, 220);
         if (seen.has(key)) return false;
         seen.add(key);
         picked.push(`“${sentence}”`);
@@ -936,24 +968,34 @@
       }
 
       for (const c of candidates){
-        if (picked.length >= 5) break;
+        if (picked.length >= (shortQuery ? 3 : 5)) break;
         addUnique(c.s);
       }
 
-      // Якщо знайшли тільки 1 речення — додамо сусіднє для контексту (по ділу)
-      if (picked.length === 1){
-        const first = candidates[0];
-        if (first){
-          const arr = splitSentencesSmart(first.from);
-          const extra = (arr[first.idx + 1] || arr[first.idx - 1] || "").trim();
-          if (extra && !looksLikeNoise(extra) && extra.length < 380){
-            addUnique(extra);
-          }
-        }
+      // якщо тільки одне речення — додаємо сусіднє (контекст, але все одно близьке)
+      if (picked.length === 1 && candidates[0]){
+        const arr = splitSentencesSmart(candidates[0].from);
+        const extra1 = (arr[candidates[0].idx + 1] || "").trim();
+        const extra2 = (arr[candidates[0].idx - 1] || "").trim();
+
+        const bestExtra =
+          (extra1 && !looksLikeNoise(extra1) && keywordScore(extra1, keywords) > 0) ? extra1 :
+          (extra2 && !looksLikeNoise(extra2) && keywordScore(extra2, keywords) > 0) ? extra2 :
+          "";
+
+        if (bestExtra) addUnique(bestExtra);
       }
 
+      // fallback: якщо не знайшли речень (дуже рідко), беремо перші 2 змістовні з топ-фрагмента
       if (picked.length === 0){
-        return "У **biology_basics.txt** є схожі теми, але немає фрагмента, який прямо відповідає на запит.";
+        const sents = splitSentencesSmart(contexts[0].text).filter(s => !looksLikeNoise(s));
+        const out = [];
+        for (const s of sents){
+          out.push(`“${s.trim()}”`);
+          if (out.length === 2) break;
+        }
+        if (out.length) return out.join("\n\n");
+        return "У **biology_basics.txt** є матеріал, але не можу витягнути коротку відповідь під цей запит.";
       }
 
       return picked.join("\n\n");
@@ -992,7 +1034,7 @@
         promptEl.value = "";
         autoResize();
 
-        let contexts = ragEnabled ? RAG.retrieve(text, 8) : [];
+        const contexts = ragEnabled ? RAG.retrieve(text, 8) : [];
         const answer = answerFromKB(text, contexts);
 
         addMsg(answer, "bot");
@@ -1006,7 +1048,6 @@
       }
     }
 
-    // Seed KB (GitHub Pages safe)
     function detectBasePath(){
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
@@ -1057,7 +1098,7 @@
 
       await seedKBFromRepoAlways();
 
-      // Перебудувати індекс ще раз після підвантаження
+      // на всякий випадок
       RAG.rebuildIndexFromKB();
 
       if (KB.getAll().length === 0) {
