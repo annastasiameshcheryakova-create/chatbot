@@ -1,41 +1,45 @@
-// worker.js
 export default {
   async fetch(request, env) {
+    // --- CORS helpers ---
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Content-Type": "application/json; charset=utf-8",
+    };
+
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: corsHeaders(request),
-      });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     if (request.method !== "POST") {
-      return new Response("Method not allowed", {
+      return new Response(JSON.stringify({ error: "Use POST" }), {
         status: 405,
-        headers: corsHeaders(request),
+        headers: corsHeaders,
       });
     }
 
     try {
       const { question, context, shortMode } = await request.json();
 
-      const system = `
-Ти навчальний асистент з біології.
-Відповідай ЛИШЕ на основі КОНТЕКСТУ.
-Якщо у контексті немає відповіді — скажи: "У базі немає відповіді на це питання."
-Не вигадуй фактів.
-Мова відповіді: українська.
+      if (!question || !context) {
+        return new Response(JSON.stringify({ error: "Missing question/context" }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
 
-Формат:
-- якщо shortMode=true → 1 речення (до ~25 слів)
-- інакше → 2–6 речень, по суті, без води.
-`.trim();
+      const system =
+        "Ти навчальний помічник з біології. " +
+        "Відповідай ТІЛЬКИ використовуючи наданий CONTEXT. " +
+        "Якщо в CONTEXT нема відповіді — скажи: 'Немає в моїй базі знань.' " +
+        "Не вигадуй фактів.";
 
-      const user = `
-ПИТАННЯ:
-${question}
-
-КОНТЕКСТ:
-${context}
-`.trim();
+      const user =
+        `QUESTION:\n${question}\n\nCONTEXT:\n${context}\n\n` +
+        (shortMode
+          ? "Зроби дуже коротко (1-2 речення), без зайвого."
+          : "Поясни зрозуміло українською, 3-7 речень, без води.");
 
       const resp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -45,39 +49,29 @@ ${context}
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          temperature: 0.2,
           messages: [
             { role: "system", content: system },
-            { role: "user", content: user }
-          ]
+            { role: "user", content: user },
+          ],
+          temperature: 0.2,
         }),
       });
 
       const data = await resp.json();
-      const answer = data?.choices?.[0]?.message?.content?.trim() || "";
+
+      const answer =
+        data?.choices?.[0]?.message?.content?.trim() ||
+        "Немає відповіді.";
 
       return new Response(JSON.stringify({ answer }), {
-        headers: {
-          ...corsHeaders(request),
-          "Content-Type": "application/json"
-        }
+        status: 200,
+        headers: corsHeaders,
       });
-
     } catch (e) {
-      return new Response(JSON.stringify({
-        error: String(e?.message || e)
-      }), {
+      return new Response(JSON.stringify({ error: String(e?.message || e) }), {
         status: 500,
-        headers: corsHeaders(request)
+        headers: corsHeaders,
       });
     }
-  }
+  },
 };
-
-function corsHeaders(request) {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
