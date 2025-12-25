@@ -405,10 +405,6 @@
         <div class="pill" style="cursor:default">🧬 BioConsult</div>
         <div style="display:flex; align-items:center; gap:10px;">
           <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🔎 Пошук: увімкнено</button>
-
-          <!-- ✅ ДОДАНО: LLM toggle (нічого не прибирає) -->
-          <button class="pill" id="llmToggleBtn" aria-pressed="false" style="cursor:pointer">✨ LLM: вимкнено</button>
-
           <div class="avatar" title="Профіль"></div>
         </div>
       </header>
@@ -477,10 +473,12 @@
               </div>
             </div>
 
+            <!-- CHIPS: прибрано 2 старі та додано 2 нові -->
             <div class="chips" id="chips">
               <div class="chip">🌿 Що таке фотосинтез?</div>
               <div class="chip">🧬 Що таке ДНК?</div>
               <div class="chip">🧫 Що таке клітина?</div>
+              <div class="chip">🧬 Що таке РНК?</div>
               <div class="chip">⚡ Що таке АТФ?</div>
             </div>
 
@@ -505,9 +503,6 @@
 
     const ragToggleBtn = document.getElementById('ragToggleBtn');
 
-    // ✅ ДОДАНО
-    const llmToggleBtn = document.getElementById('llmToggleBtn');
-
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const closePlusMenu = document.getElementById('closePlusMenu');
@@ -523,12 +518,6 @@
 
     let sendBtn = document.getElementById('sendBtn');
     let ragEnabled = true;
-
-    // ✅ ДОДАНО
-    let llmEnabled = false;
-
-    // 🔴 ЗАМІНИ на свій Cloudflare Worker URL
-    const LLM_ENDPOINT = "https://YOUR-WORKER.workers.dev";
 
     function setStatus(t){ statusText.textContent = t; }
 
@@ -598,14 +587,6 @@
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🔎 Пошук: увімкнено" : "🔎 Пошук: вимкнено";
       ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
-      setStatus("Готово");
-    });
-
-    // ✅ ДОДАНО: перемикач LLM
-    llmToggleBtn.addEventListener('click', () => {
-      llmEnabled = !llmEnabled;
-      llmToggleBtn.textContent = llmEnabled ? "✨ LLM: увімкнено" : "✨ LLM: вимкнено";
-      llmToggleBtn.setAttribute("aria-pressed", String(llmEnabled));
       setStatus("Готово");
     });
 
@@ -873,29 +854,6 @@
       return lines.slice(0, 2).join("\n");
     }
 
-    // ✅ ДОДАНО: прибирає "=====" у відповідях
-    function stripNoiseLines(text){
-      return String(text || "")
-        .split(/\r?\n/)
-        .filter(l => !/^\s*[=]{3,}\s*$/.test(l))
-        .join("\n")
-        .trim();
-    }
-
-    // ✅ ДОДАНО: виклик LLM
-    async function callLLM({ question, context, shortMode }) {
-      const res = await fetch(LLM_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, shortMode })
-      });
-
-      if (!res.ok) throw new Error("LLM error");
-
-      const data = await res.json();
-      return String(data?.answer || "").trim();
-    }
-
     // -------------------------
     // KBIndex: builds group index from biology_basics.txt
     // -------------------------
@@ -977,43 +935,10 @@
           return;
         }
 
-        // ✅ БАЗОВА ВІДПОВІДЬ з KB
-        let answer = KBIndex.answer(text);
-        answer = stripNoiseLines(answer);
+        const answer = KBIndex.answer(text);
+        addMsg(answer, "bot");
 
-        // ✅ якщо LLM вимкнений — як було
-        if (!llmEnabled){
-          addMsg(answer, "bot");
-          setStatus("Готово");
-          return;
-        }
-
-        // ✅ якщо база не знайшла/помилка структури — не викликаємо LLM
-        if (/не знайшов|немає|структурованих блоків/i.test(answer)){
-          addMsg(answer, "bot");
-          setStatus("Готово");
-          return;
-        }
-
-        // ✅ короткий режим (1-2 слова)
-        const qToks = tokensOf(text);
-        const shortMode =
-          qToks.length <= 2 &&
-          normalize(text).length <= 22 &&
-          !text.includes("?");
-
-        setStatus("Уточнюю відповідь через LLM…");
-
-        const llmAnswer = await callLLM({
-          question: text,
-          context: answer,
-          shortMode
-        });
-
-        addMsg(stripNoiseLines(llmAnswer || answer), "bot");
         setStatus("Готово");
-        return;
-
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
         setStatus("Помилка");
@@ -1030,6 +955,9 @@
       KBIndex.rebuildFromKB();
       autoResize();
       setStatus("Готово");
+
+      // ❌ ВИДАЛЕНО авто-завантаження з репо:
+      // await seedKBFromRepoAlways();
 
       if (KB.getAll().length === 0) {
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
