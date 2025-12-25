@@ -711,24 +711,57 @@
       });
     }
 
+    /***************************************************************
+     * ✅ KEYWORD-FIRST RAG: підбір релевантних фрагментів
+     * - Шукає по ключових словах (через токени) + простий TF-IDF
+     * - Повертає тільки "по ділу": фільтрує слабкі збіги
+     * - Відповідає 2–5 реченнями, зібраними навколо збігів
+     ***************************************************************/
     const RAG = (() => {
       let chunks = [];
       let stats = null;
 
-      function tokenize(text) {
+      function normalize(text){
         return (text || "")
           .toLowerCase()
           .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-          .split(/\s+/)
-          .filter(Boolean);
+          .replace(/\s+/g, " ")
+          .trim();
       }
 
-      function chunkText(text, chunkSize = 900, overlap = 120) {
+      function tokenize(text){
+        const stop = new Set([
+          "і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або",
+          "the","a","an","and","or","to","of","in","on","for","with","is","are"
+        ]);
+        return normalize(text)
+          .split(" ")
+          .filter(Boolean)
+          .filter(w => w.length >= 3)
+          .filter(w => !stop.has(w));
+      }
+
+      // Беремо "ключові слова" із запиту: унікальні, до 14 шт
+      function extractKeywords(question){
+        const toks = tokenize(question);
+        const uniq = [];
+        const seen = new Set();
+        for (const t of toks){
+          if (seen.has(t)) continue;
+          seen.add(t);
+          uniq.push(t);
+          if (uniq.length >= 14) break;
+        }
+        return uniq;
+      }
+
+      // Чанк по заголовках/параграфах краще, але тут лишимо простий
+      function chunkText(text, chunkSize=900, overlap=120){
         const clean = (text || "").replace(/\s+/g, " ").trim();
         if (!clean) return [];
         const out = [];
         let i = 0;
-        while (i < clean.length) {
+        while (i < clean.length){
           const end = Math.min(clean.length, i + chunkSize);
           out.push(clean.slice(i, end));
           i = end - overlap;
@@ -738,23 +771,21 @@
         return out;
       }
 
-      function buildVocabStats(chunks) {
+      function buildStats(chunks){
         const df = Object.create(null);
-        for (const ch of chunks) {
+        for (const ch of chunks){
           const seen = new Set(tokenize(ch.text));
           for (const t of seen) df[t] = (df[t] || 0) + 1;
         }
         return { df, N: chunks.length };
       }
 
-      function embed(text, stats) {
-        const toks = tokenize(text);
+      function tfidfVec(text, stats){
         const tf = Object.create(null);
-        for (const t of toks) tf[t] = (tf[t] || 0) + 1;
-
+        for (const t of tokenize(text)) tf[t] = (tf[t] || 0) + 1;
         const vec = Object.create(null);
         const { df, N } = stats || { df:{}, N:1 };
-        for (const [t, f] of Object.entries(tf)) {
+        for (const [t, f] of Object.entries(tf)){
           const d = df[t] || 0;
           const idf = Math.log((N + 1) / (d + 1)) + 1;
           vec[t] = f * idf;
@@ -762,55 +793,66 @@
         return vec;
       }
 
-      function cosine(a, b) {
-        let dot = 0, na = 0, nb = 0;
+      function cosine(a, b){
+        let dot=0, na=0, nb=0;
         const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-        for (const k of keys) {
+        for (const k of keys){
           const x = a[k] || 0;
           const y = b[k] || 0;
-          dot += x * y;
-          na += x * x;
-          nb += y * y;
+          dot += x*y;
+          na += x*x;
+          nb += y*y;
         }
         if (!na || !nb) return 0;
         return dot / (Math.sqrt(na) * Math.sqrt(nb));
       }
 
       function rebuildIndexFromKB(){
-        const docs = KB.getAll();
+        const docs = KB.getAll().filter(d => d.title === "biology_basics.txt");
         chunks = [];
-        for (const d of docs) {
+        for (const d of docs){
           const parts = chunkText(d.text);
-          parts.forEach((p, idx) => {
-            chunks.push({ title: d.title, text: p, id: `${d.title}#${idx}` });
-          });
+          parts.forEach((p, idx) => chunks.push({ title:d.title, text:p, id:`${d.title}#${idx}` }));
         }
-        stats = buildVocabStats(chunks);
-        chunks.forEach(ch => ch.vec = embed(ch.text, stats));
+        stats = buildStats(chunks);
+        for (const ch of chunks) ch.vec = tfidfVec(ch.text, stats);
       }
 
-      function retrieveTopK(question, k=14){
-        if(!stats || !chunks.length) return [];
-        const qvec = embed(question, stats);
-        const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
-        scored.sort((a,b)=>b.score-a.score);
+      // ⭐ Ключове: rank = (збіг ключових слів) + cosine(tf-idf)
+      function retrieve(question, topK=8){
+        if (!stats || !chunks.length) return [];
 
-        return scored
-          .slice(0, k)
-          .filter(x => x.score > 0.045)  // ✅ більше контексту
-          .map(x => x.ch);
+        const keywords = extractKeywords(question);
+        const qVec = tfidfVec(question, stats);
+
+        const scored = chunks.map(ch => {
+          const norm = normalize(ch.text);
+          let hits = 0;
+          for (const k of keywords){
+            // точне слово або частина слова
+            if (norm.includes(k)) hits++;
+          }
+
+          const sim = cosine(qVec, ch.vec);
+
+          // сильніше цінуємо прямі збіги (по ключових словах)
+          const score = (hits * 0.9) + (sim * 1.4);
+
+          return { ch, score, hits, sim };
+        });
+
+        scored.sort((a,b)=> b.score - a.score);
+
+        // ✅ відсікаємо "не по ділу":
+        // - або мінімум 2 ключових збіги
+        // - або дуже високий sim
+        const filtered = scored.filter(x => x.hits >= 2 || x.sim >= 0.18);
+
+        return filtered.slice(0, topK).map(x => x.ch);
       }
 
-      return { rebuildIndexFromKB, retrieveTopK };
+      return { rebuildIndexFromKB, retrieve };
     })();
-
-    function normalize(s){
-      return String(s || "")
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
 
     function splitSentencesSmart(text){
       const t = String(text || "")
@@ -824,100 +866,97 @@
     function looksLikeNoise(s){
       const t = String(s || "");
       if (/={3,}|-{3,}|_{3,}|\*{3,}/.test(t)) return true;
-      if (t.length < 10) return true;
+      if (t.length < 25) return true;
       return false;
     }
 
-    function scoreSentence(sentence, question){
-      const s = normalize(sentence);
-      const q = normalize(question);
-
-      const qTokens = q.split(" ").filter(w => w.length >= 4).slice(0, 14);
+    function keywordScore(sentence, keywords){
+      const s = (sentence || "").toLowerCase();
       let score = 0;
-
-      for (const tok of qTokens){
-        if (s.includes(tok)) score += 2;
+      for (const k of keywords){
+        if (s.includes(k)) score += 2;
       }
-
-      if (/(це|називають|означає|процес|відбувається|полягає)/i.test(sentence)) score += 2;
-      if (/(особливості|загальне|в цілому|інше)/i.test(sentence)) score -= 1;
-
+      // Бонус за "визначення/процес" (часто саме те, що треба)
+      if (/(це|процес|відбувається|полягає|складається|забезпечує|результат)/i.test(sentence)) score += 1;
       return score;
     }
 
-    // ✅ 2–4 речення в одному повідомленні (більше інформації)
-    function offlineAnswerFromContexts(question, contexts) {
-      const q = (question || "").trim();
+    // ✅ Відповідь "тільки по ділу":
+    // - беремо топ 2 чанки
+    // - витягаємо 2–5 речень з найбільшим збігом ключових слів
+    // - якщо збіг слабкий -> чесно кажемо, що нема
+    function answerFromKB(question, contexts){
+      const q = String(question || "").trim();
       if (!q) return "Напиши запитання 🙂";
 
-      if (!Array.isArray(contexts) || contexts.length === 0) {
-        return "У **biology_basics.txt** не знайшов точний фрагмент. Спробуй інші ключові слова.";
+      if (!contexts || contexts.length === 0){
+        return "У **biology_basics.txt** не знайшов релевантного фрагмента. Спробуй інші ключові слова.";
       }
 
-      const candidates = [];
-      for (const c of contexts.slice(0, 8)) {
-        const txt = String(c?.text || "");
-        for (const s of splitSentencesSmart(txt)) {
-          const t = s.trim();
-          if (t.length < 30) continue;
-          if (t.length > 320) continue;
-          if (looksLikeNoise(t)) continue;
+      // ключові слова запиту
+      const keywords = (() => {
+        const stop = new Set(["і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або"]);
+        return q.toLowerCase()
+          .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+          .split(/\s+/)
+          .filter(Boolean)
+          .filter(w => w.length >= 3 && !stop.has(w))
+          .slice(0, 14);
+      })();
 
-          const score = scoreSentence(t, q);
+      const candidates = [];
+
+      // беремо 2 найкращі фрагменти, щоб не "розмазувало" відповідь
+      for (const c of contexts.slice(0, 2)){
+        const sentences = splitSentencesSmart(c.text);
+        for (let i = 0; i < sentences.length; i++){
+          const s = (sentences[i] || "").trim();
+          if (looksLikeNoise(s)) continue;
+          if (s.length > 380) continue;
+
+          const score = keywordScore(s, keywords);
           if (score <= 0) continue;
 
-          candidates.push({ text: t, score });
+          candidates.push({ s, score, idx:i, from:c.text });
         }
       }
 
-      candidates.sort((a, b) => b.score - a.score);
+      candidates.sort((a,b)=> b.score - a.score);
 
-      // унікальні 2–4 речення
+      // беремо 2–5 речень, але уникаємо повторів
       const picked = [];
       const seen = new Set();
-      for (const it of candidates) {
-        const key = normalize(it.text).slice(0, 160);
-        if (seen.has(key)) continue;
+
+      function addUnique(sentence){
+        const key = sentence.toLowerCase().slice(0, 200);
+        if (seen.has(key)) return false;
         seen.add(key);
-        picked.push(`“${it.text}”`);
-        if (picked.length === 4) break;
+        picked.push(`“${sentence}”`);
+        return true;
       }
 
-      if (picked.length >= 2) return picked.join("\n\n");
-      if (picked.length === 1) return picked[0];
-
-      const fallback = String(contexts[0]?.text || "").trim();
-      const clipped = fallback.length > 520 ? fallback.slice(0, 520).trim() + "…" : fallback;
-      return `“${clipped}”`;
-    }
-
-    function expandQueryForBilingualSearch(q){
-      const s = (q || "").toLowerCase();
-      const dict = [
-        [/фотосинтез|photosynthesis/gi, " photosynthesis "],
-        [/клітина|cell/gi, " cell "],
-        [/днк|dna/gi, " dna "],
-        [/рнк|rna/gi, " rna "],
-        [/реплікація|replication/gi, " dna replication "],
-        [/мітоз|mitosis/gi, " mitosis "],
-        [/мейоз|meiosis/gi, " meiosis "],
-        [/вірус|virus/gi, " virus "],
-        [/бактерія|bacteria/gi, " bacteria "],
-        [/фермент|enzyme/gi, " enzyme "],
-        [/білок|protein/gi, " protein "],
-        [/мутація|mutation/gi, " mutation "],
-        [/еволюція|evolution/gi, " evolution "],
-        [/дихання|respiration/gi, " respiration "],
-        [/хлоропласт|chloroplast/gi, " chloroplast "],
-        [/мітохондрія|mitochondria/gi, " mitochondria "],
-        [/ядро|nucleus/gi, " nucleus "],
-      ];
-
-      let out = " " + s + " ";
-      for (const [re, add] of dict){
-        if (re.test(out)) out += add;
+      for (const c of candidates){
+        if (picked.length >= 5) break;
+        addUnique(c.s);
       }
-      return out.trim();
+
+      // Якщо знайшли тільки 1 речення — додамо сусіднє для контексту (по ділу)
+      if (picked.length === 1){
+        const first = candidates[0];
+        if (first){
+          const arr = splitSentencesSmart(first.from);
+          const extra = (arr[first.idx + 1] || arr[first.idx - 1] || "").trim();
+          if (extra && !looksLikeNoise(extra) && extra.length < 380){
+            addUnique(extra);
+          }
+        }
+      }
+
+      if (picked.length === 0){
+        return "У **biology_basics.txt** є схожі теми, але немає фрагмента, який прямо відповідає на запит.";
+      }
+
+      return picked.join("\n\n");
     }
 
     // FIX double answer
@@ -946,21 +985,17 @@
       sendingLock = true;
 
       try{
-        setStatus("Пишу відповідь…");
+        setStatus("Шукаю по ключових словах…");
         sendBtn.disabled = true;
 
         addMsg(text, "user");
         promptEl.value = "";
         autoResize();
 
-        const query = expandQueryForBilingualSearch(text);
+        let contexts = ragEnabled ? RAG.retrieve(text, 8) : [];
+        const answer = answerFromKB(text, contexts);
 
-        let contexts = ragEnabled ? RAG.retrieveTopK(query, 14) : [];
-        contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
-
-        const answer = offlineAnswerFromContexts(text, contexts);
         addMsg(answer, "bot");
-
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -1017,11 +1052,13 @@
       attachSendHandlersOnce();
 
       renderKB();
-      RAG.rebuildIndexFromKB();
       autoResize();
       setStatus("Готово");
 
       await seedKBFromRepoAlways();
+
+      // Перебудувати індекс ще раз після підвантаження
+      RAG.rebuildIndexFromKB();
 
       if (KB.getAll().length === 0) {
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
