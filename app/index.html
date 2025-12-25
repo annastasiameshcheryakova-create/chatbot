@@ -35,6 +35,7 @@
 
     .app{ height:100dvh; display:grid; grid-template-columns: 320px 1fr; }
 
+    /* Sidebar */
     .sidebar{
       background:rgba(255,255,255,.65);
       backdrop-filter: blur(14px);
@@ -101,6 +102,7 @@
       display:flex;align-items:center;gap:8px;
     }
 
+    /* Main */
     .main{ position:relative; display:flex; flex-direction:column; min-width:0; }
     .topbar{
       height:64px;
@@ -173,6 +175,7 @@
       line-height:1.45;
     }
 
+    /* Chat */
     .chatlog{
       width:min(900px, 100%);
       margin-top:14px;
@@ -202,6 +205,7 @@
     }
     .msg.bot{ align-self:flex-start; }
 
+    /* Composer */
     .composer-wrap{
       position:absolute;
       left:0; right:0; bottom:0;
@@ -302,6 +306,7 @@
       flex-wrap:wrap;
     }
 
+    /* Plus menu */
     .plusMenu{
       position:absolute;
       left:12px;
@@ -414,7 +419,7 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Відповідаю цитатами з конспекта <b>biology_basics.txt</b>.
+            Відповідаю тільки з конспекта <b>biology_basics.txt</b>: даю <b>визначення</b> + <b>схему (етапи/кроки)</b> за ключовими словами.
             Підтримую **жирний** через зірочки: <b>**так**</b>.
           </div>
         </div>
@@ -469,7 +474,6 @@
             </div>
 
             <div class="chips" id="chips">
-              <div class="chip">🌿 Що таке біологія?</div>
               <div class="chip">🌿 Поясни фотосинтез</div>
               <div class="chip">🧬 Що таке реплікація ДНК?</div>
               <div class="chip">🦠 Різниця вірус/бактерія</div>
@@ -489,6 +493,9 @@
   </div>
 
   <script>
+    /***********************
+     * UI refs
+     ***********************/
     const promptEl = document.getElementById('prompt');
     const chatLog  = document.getElementById('chatLog');
     const chips    = document.getElementById('chips');
@@ -521,6 +528,9 @@
     }
     promptEl.addEventListener('input', autoResize);
 
+    /***********************
+     * Minimal markdown (**bold**)
+     ***********************/
     function escapeHTML(s){
       return String(s || "")
         .replaceAll("&", "&amp;")
@@ -545,6 +555,9 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    /***********************
+     * Plus menu
+     ***********************/
     function openMenu(){ plusMenu.classList.add("open"); }
     function closeMenu(){ plusMenu.classList.remove("open"); }
 
@@ -577,6 +590,9 @@
       setStatus("Готово");
     });
 
+    /***********************
+     * Toggle search
+     ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 Пошук: увімкнено" : "🧠 Пошук: вимкнено";
@@ -584,6 +600,9 @@
       setStatus("Готово");
     });
 
+    /***********************
+     * Upload text
+     ***********************/
     textInput.addEventListener('change', async () => {
       const file = textInput.files?.[0];
       if(!file) return;
@@ -599,6 +618,9 @@
       textInput.value = "";
     });
 
+    /***********************
+     * Chips & new chat
+     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -616,6 +638,9 @@
       closeMenu();
     });
 
+    /***********************
+     * KB storage
+     ***********************/
     const KB = {
       key: "bioconsult_kb_docs",
 
@@ -707,93 +732,35 @@
       });
     }
 
-    /***************************************************************
-     * ✅ Пошук по ключовим словам користувача (людська логіка)
-     * - Для коротких запитів типу "що таке біологія" працює стабільно
-     * - Додає синоніми/варіанти (укр/рос/англ) для кращого збігу
-     * - Відсікає "не по ділу" динамічними порогами
-     ***************************************************************/
+    /***********************
+     * RAG (TF-IDF-ish) + keywords
+     ***********************/
     const RAG = (() => {
       let chunks = [];
       let stats = null;
 
-      function normalize(text){
+      // українські стоп-слова (мінімальний набір)
+      const STOP = new Set([
+        "що","таке","це","як","і","й","або","чи","у","в","на","до","з","із","про","для",
+        "який","яка","яке","які","мені","тобі","вам","ми","ви","вони","вона","він",
+        "де","коли","скільки","чому","поясни","поясніть","будь","ласка","будь-ласка",
+        "розкажи","розкажіть","будьщо","будь-що"
+      ]);
+
+      function tokenize(text) {
         return (text || "")
           .toLowerCase()
           .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-          .replace(/\s+/g, " ")
-          .trim();
+          .split(/\s+/)
+          .filter(Boolean);
       }
 
-      const STOP = new Set([
-        // UA
-        "і","й","та","а","але","що","це","як","у","в","на","до","з","із","зі","за","про","для","від","при","або","чи","то","ті","цей","ця","це","ці","який","яка","яке","які",
-        // RU
-        "и","й","да","а","но","что","это","как","в","во","на","до","с","со","за","про","для","от","при","или","ли","то","этот","эта","эти","какой","какая","какое","какие",
-        // EN
-        "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were"
-      ]);
-
-      // простий словник синонімів/варіантів
-      const SYN = [
-        { re: /\bбіологія\b/gi, add: ["biology","биология"] },
-        { re: /\bанатомія\b/gi, add: ["anatomy","анатомия"] },
-        { re: /\bекологія\b/gi, add: ["ecology","экология"] },
-        { re: /\bклітина\b/gi, add: ["cell","клетка"] },
-        { re: /\bднк\b/gi, add: ["dna","дезоксирибонуклеїнова","дезоксирибонуклеиновая"] },
-        { re: /\bрнк\b/gi, add: ["rna","рибонуклеїнова","рибонуклеиновая"] },
-        { re: /\bфотосинтез\b/gi, add: ["photosynthesis"] },
-        { re: /\bмітоз\b/gi, add: ["mitosis"] },
-        { re: /\bмейоз\b/gi, add: ["meiosis"] },
-        { re: /\bбактер(ія|ии|ії)\b/gi, add: ["bacteria"] },
-        { re: /\bвірус(и|ів)?\b/gi, add: ["virus","viruses"] },
-      ];
-
-      function tokenize(text){
-        return normalize(text)
-          .split(" ")
-          .filter(Boolean)
-          .filter(w => w.length >= 3)
-          .filter(w => !STOP.has(w));
-      }
-
-      // ключові слова саме "людини", але з підсиленням синонімів
-      function extractKeywordsHuman(question){
-        const base = String(question || "");
-        let expanded = " " + base + " ";
-        for (const s of SYN){
-          if (s.re.test(expanded)){
-            expanded += " " + s.add.join(" ") + " ";
-          }
-        }
-
-        const toks = tokenize(expanded);
-
-        // унікальні, до 16
-        const out = [];
-        const seen = new Set();
-        for (const t of toks){
-          if (seen.has(t)) continue;
-          seen.add(t);
-          out.push(t);
-          if (out.length >= 16) break;
-        }
-
-        // якщо запит дуже короткий і вийшло 0 — беремо хоч 1 слово без стопів (fallback)
-        if (out.length === 0){
-          const raw = normalize(base).split(" ").filter(Boolean).filter(w => w.length >= 3);
-          if (raw[0]) out.push(raw[0]);
-        }
-
-        return out;
-      }
-
-      function chunkText(text, chunkSize=900, overlap=120){
+      function chunkText(text, chunkSize = 900, overlap = 120) {
         const clean = (text || "").replace(/\s+/g, " ").trim();
         if (!clean) return [];
         const out = [];
         let i = 0;
-        while (i < clean.length){
+        while (i < clean.length) {
           const end = Math.min(clean.length, i + chunkSize);
           out.push(clean.slice(i, end));
           i = end - overlap;
@@ -803,21 +770,23 @@
         return out;
       }
 
-      function buildStats(chunks){
+      function buildVocabStats(chunks) {
         const df = Object.create(null);
-        for (const ch of chunks){
+        for (const ch of chunks) {
           const seen = new Set(tokenize(ch.text));
           for (const t of seen) df[t] = (df[t] || 0) + 1;
         }
         return { df, N: chunks.length };
       }
 
-      function tfidfVec(text, stats){
+      function embed(text, stats) {
+        const toks = tokenize(text);
         const tf = Object.create(null);
-        for (const t of tokenize(text)) tf[t] = (tf[t] || 0) + 1;
+        for (const t of toks) tf[t] = (tf[t] || 0) + 1;
+
         const vec = Object.create(null);
         const { df, N } = stats || { df:{}, N:1 };
-        for (const [t, f] of Object.entries(tf)){
+        for (const [t, f] of Object.entries(tf)) {
           const d = df[t] || 0;
           const idf = Math.log((N + 1) / (d + 1)) + 1;
           vec[t] = f * idf;
@@ -825,103 +794,133 @@
         return vec;
       }
 
-      function cosine(a, b){
-        let dot=0, na=0, nb=0;
+      function cosine(a, b) {
+        let dot = 0, na = 0, nb = 0;
         const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-        for (const k of keys){
+        for (const k of keys) {
           const x = a[k] || 0;
           const y = b[k] || 0;
-          dot += x*y;
-          na += x*x;
-          nb += y*y;
+          dot += x * y;
+          na += x * x;
+          nb += y * y;
         }
         if (!na || !nb) return 0;
         return dot / (Math.sqrt(na) * Math.sqrt(nb));
       }
 
       function rebuildIndexFromKB(){
-        const docs = KB.getAll().filter(d => d.title === "biology_basics.txt");
+        const docs = KB.getAll();
         chunks = [];
-        for (const d of docs){
+        for (const d of docs) {
           const parts = chunkText(d.text);
-          parts.forEach((p, idx) => chunks.push({ title:d.title, text:p, id:`${d.title}#${idx}` }));
+          parts.forEach((p, idx) => {
+            chunks.push({ title: d.title, text: p, id: `${d.title}#${idx}` });
+          });
         }
-        stats = buildStats(chunks);
-        for (const ch of chunks) ch.vec = tfidfVec(ch.text, stats);
+        stats = buildVocabStats(chunks);
+        chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
-      // головна функція пошуку
-      function retrieve(question, topK=8){
-        if (!stats || !chunks.length) return [];
+      function retrieveTopK(question, k=10){
+        if(!stats || !chunks.length) return [];
+        const qvec = embed(question, stats);
+        const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
+        scored.sort((a,b)=>b.score-a.score);
 
-        const keywords = extractKeywordsHuman(question);
-        const qVec = tfidfVec(question, stats);
-
-        // динамічні пороги: короткий запит -> м’якші умови
-        const shortQuery = keywords.length <= 2;
-
-        const scored = chunks.map(ch => {
-          const norm = normalize(ch.text);
-
-          let hits = 0;
-          for (const k of keywords){
-            if (norm.includes(k)) hits++;
-          }
-
-          const sim = cosine(qVec, ch.vec);
-
-          // score: ключові слова домінують, TF-IDF допомагає
-          const score = (hits * 1.2) + (sim * 1.1);
-
-          return { ch, score, hits, sim };
-        });
-
-        scored.sort((a,b)=> b.score - a.score);
-
-        // фільтр "по ділу"
-        const filtered = scored.filter(x => {
-          if (shortQuery) return (x.hits >= 1) || (x.sim >= 0.10);
-          return (x.hits >= 2) || (x.sim >= 0.18);
-        });
-
-        // якщо раптом нічого не пройшло — беремо просто topK (щоб не було “не знайшов” дарма)
-        const base = (filtered.length ? filtered : scored).slice(0, topK).map(x => x.ch);
-
-        return base;
+        return scored
+          .slice(0, k)
+          .filter(x => x.score > 0.06)   // трошки жорсткіше, щоб “по ділу”
+          .map(x => x.ch);
       }
 
-      return { rebuildIndexFromKB, retrieve, extractKeywordsHuman, normalize };
+      function extractKeywordsHuman(q){
+        const toks = tokenize(q)
+          .map(t => t.trim())
+          .filter(t => t.length >= 3)
+          .filter(t => !STOP.has(t));
+
+        // унікальні, збережемо порядок
+        const out = [];
+        const seen = new Set();
+        for (const t of toks){
+          if (seen.has(t)) continue;
+          seen.add(t);
+          out.push(t);
+        }
+
+        // якщо користувач написав дуже мало — лишаємо хоч щось
+        return out.slice(0, 10);
+      }
+
+      return { rebuildIndexFromKB, retrieveTopK, extractKeywordsHuman };
     })();
 
+    /***********************
+     * Answer: definition + scheme (ONLY biology_basics.txt)
+     ***********************/
     function splitSentencesSmart(text){
       const t = String(text || "")
-        .replace(/\r/g, " ")
-        .replace(/\n+/g, " ")
+        .replace(/\r/g, "")
         .trim();
       if (!t) return [];
-      return t.split(/(?<=[.!?…])\s+/);
+      return t
+        .replace(/\n{3,}/g, "\n\n")
+        .split(/(?<=[.!?…])\s+(?=[A-ZА-ЯІЇЄҐ"“])/u);
     }
 
     function looksLikeNoise(s){
-      const t = String(s || "");
-      if (/={3,}|-{3,}|_{3,}|\*{3,}/.test(t)) return true;
-      if (t.length < 25) return true;
+      const t = String(s || "").trim();
+      if (!t) return true;
+      if (/^ключові\s+поняття\s*:/i.test(t)) return true;   // важливо
+      if (/={3,}|-{3,}|_{3,}/.test(t)) return true;
+      if (t.length < 20) return true;
       return false;
     }
 
-    function keywordScore(sentence, keywords){
-      const s = (sentence || "").toLowerCase();
-      let score = 0;
-      for (const k of keywords){
-        if (s.includes(k)) score += 2;
-      }
-      if (/(це|процес|відбувається|полягає|складається|забезпечує|результат|вивчає|досліджує)/i.test(sentence)) score += 1;
-      return score;
+    function isDefinitionLine(line){
+      const t = String(line || "").trim();
+      return (
+        /—\s*це\b/i.test(t) ||
+        /\bце\s+процес\b/i.test(t) ||
+        /\bце\s+анаболічний\b/i.test(t) ||
+        /\bозначає\b/i.test(t) ||
+        /\bназивають\b/i.test(t)
+      );
     }
 
-    // ✅ відповідь тільки по суті:
-    // - беремо речення з найбільшими збігами ключових слів
-    // - якщо короткий запит — достатньо 1 ключового збігу
+    function isSchemeLine(line){
+      const t = String(line || "").trim();
+      if (!t) return false;
+      if (/^ключові\s+поняття\s*:/i.test(t)) return false;
+      return (
+        /^(\*|•|-)\s+/.test(t) ||
+        /^\d+[\).]\s+/.test(t) ||
+        /^етап\s+\d+/i.test(t) ||
+        /^фаза\s+/i.test(t) ||
+        /\bключові\s+процеси\b/i.test(t) ||
+        /\bфази\b/i.test(t) ||
+        /\bрезультат\b/i.test(t) ||
+        /\bвідбувається\b/i.test(t)
+      );
+    }
+
+    function normalizeSimple(s){
+      return String(s || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function keywordHits(line, keywords){
+      const t = normalizeSimple(line);
+      let hits = 0;
+      for (const k of keywords){
+        if (t.includes(k)) hits++;
+      }
+      return hits;
+    }
+
     function answerFromKB(question, contexts){
       const q = String(question || "").trim();
       if (!q) return "Напиши запитання 🙂";
@@ -933,75 +932,105 @@
       const keywords = RAG.extractKeywordsHuman(q);
       const shortQuery = keywords.length <= 2;
 
-      const candidates = [];
+      let best = null;
+      const pool = contexts.slice(0, 5);
 
-      // беремо 3 фрагменти, але вибір речень робимо жорстко "по ділу"
-      for (const c of contexts.slice(0, 3)){
-        const sentences = splitSentencesSmart(c.text);
-        for (let i = 0; i < sentences.length; i++){
-          const s = (sentences[i] || "").trim();
-          if (looksLikeNoise(s)) continue;
-          if (s.length > 420) continue;
+      for (const ctx of pool){
+        const lines = String(ctx.text || "").split("\n").map(x => x.trim()).filter(Boolean);
 
-          const score = keywordScore(s, keywords);
-          if (shortQuery) {
-            if (score <= 0) continue; // для коротких — 1 збіг ок
-          } else {
-            if (score <= 2) continue; // для довших — вже треба “по суті”
+        for (let i = 0; i < lines.length; i++){
+          const line = lines[i];
+          if (looksLikeNoise(line)) continue;
+
+          const hits = keywordHits(line, keywords);
+          const defBoost = isDefinitionLine(line) ? 3 : 0;
+
+          const pass = shortQuery ? (hits >= 1 || defBoost) : (hits >= 2 || defBoost);
+          if (!pass) continue;
+
+          const score = hits * 2 + defBoost;
+          if (!best || score > best.score){
+            best = { score, line, ctx, lineIndex: i, lines };
           }
-
-          candidates.push({ s, score, idx:i, from:c.text });
         }
       }
 
-      candidates.sort((a,b)=> b.score - a.score);
-
-      const picked = [];
-      const seen = new Set();
-
-      function addUnique(sentence){
-        const key = sentence.toLowerCase().slice(0, 220);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        picked.push(`“${sentence}”`);
-        return true;
-      }
-
-      for (const c of candidates){
-        if (picked.length >= (shortQuery ? 3 : 5)) break;
-        addUnique(c.s);
-      }
-
-      // якщо тільки одне речення — додаємо сусіднє (контекст, але все одно близьке)
-      if (picked.length === 1 && candidates[0]){
-        const arr = splitSentencesSmart(candidates[0].from);
-        const extra1 = (arr[candidates[0].idx + 1] || "").trim();
-        const extra2 = (arr[candidates[0].idx - 1] || "").trim();
-
-        const bestExtra =
-          (extra1 && !looksLikeNoise(extra1) && keywordScore(extra1, keywords) > 0) ? extra1 :
-          (extra2 && !looksLikeNoise(extra2) && keywordScore(extra2, keywords) > 0) ? extra2 :
-          "";
-
-        if (bestExtra) addUnique(bestExtra);
-      }
-
-      // fallback: якщо не знайшли речень (дуже рідко), беремо перші 2 змістовні з топ-фрагмента
-      if (picked.length === 0){
-        const sents = splitSentencesSmart(contexts[0].text).filter(s => !looksLikeNoise(s));
-        const out = [];
-        for (const s of sents){
-          out.push(`“${s.trim()}”`);
-          if (out.length === 2) break;
+      if (!best){
+        const ctx = contexts[0];
+        const sentences = splitSentencesSmart(ctx.text).map(s => s.trim()).filter(s => !looksLikeNoise(s));
+        let topS = null;
+        for (const s of sentences){
+          const hits = keywordHits(s, keywords);
+          if ((shortQuery && hits < 1) || (!shortQuery && hits < 2)) continue;
+          const defBoost = isDefinitionLine(s) ? 2 : 0;
+          const score = hits * 2 + defBoost;
+          if (!topS || score > topS.score) topS = { s, score };
         }
-        if (out.length) return out.join("\n\n");
-        return "У **biology_basics.txt** є матеріал, але не можу витягнути коротку відповідь під цей запит.";
+        if (!topS){
+          return "У **biology_basics.txt** є матеріал, але не знайшов коротке визначення під цей запит. Спробуй уточнити ключові слова.";
+        }
+        return `**Визначення:**\n“${topS.s}”`;
       }
 
-      return picked.join("\n\n");
+      // збираємо “схему” після визначення
+      const scheme = [];
+      const MAX_SCHEME_LINES = 8;
+
+      for (let j = best.lineIndex + 1; j < best.lines.length && scheme.length < MAX_SCHEME_LINES; j++){
+        const ln = best.lines[j].trim();
+        if (!ln) break;
+        if (/^={3,}/.test(ln)) break;
+        if (looksLikeNoise(ln)) continue;
+
+        const hits = keywordHits(ln, keywords);
+        if (isSchemeLine(ln) || hits > 0){
+          if (/^ключові\s+поняття\s*:/i.test(ln)) continue;
+          scheme.push(ln);
+        }
+      }
+
+      // якщо мало — добираємо у вікні поруч
+      if (scheme.length < 3){
+        const start = Math.max(0, best.lineIndex - 6);
+        const end = Math.min(best.lines.length, best.lineIndex + 16);
+        for (let j = start; j < end && scheme.length < MAX_SCHEME_LINES; j++){
+          if (j === best.lineIndex) continue;
+          const ln = best.lines[j].trim();
+          if (!ln || looksLikeNoise(ln)) continue;
+          if (/^ключові\s+поняття\s*:/i.test(ln)) continue;
+
+          const hits = keywordHits(ln, keywords);
+          if (isSchemeLine(ln) && (shortQuery ? true : hits >= 1)){
+            scheme.push(ln);
+          }
+        }
+      }
+
+      let out = `**Визначення:**\n“${best.line}”`;
+
+      if (scheme.length){
+        const bullets = scheme
+          .slice(0, 6)
+          .map(x => {
+            if (/^(\*|•|-)\s+/.test(x)) return `- ${x.replace(/^(\*|•|-)\s+/, "")}`;
+            if (/^\d+[\).]\s+/.test(x)) return `- ${x.replace(/^\d+[\).]\s+/, "")}`;
+            return `- ${x}`;
+          })
+          .join("\n");
+
+        out += `\n\n**Схема роботи (коротко):**\n${bullets}`;
+      } else {
+        const fallback = String(best.ctx.text || "").trim();
+        const clipped = fallback.length > 520 ? fallback.slice(0, 520).trim() + "…" : fallback;
+        out += `\n\n**Схема роботи:**\n“${clipped}”`;
+      }
+
+      return out;
     }
 
-    // FIX double answer
+    /***********************
+     * Send (fix double answer)
+     ***********************/
     let sendingLock = false;
 
     function attachSendHandlersOnce(){
@@ -1027,17 +1056,20 @@
       sendingLock = true;
 
       try{
-        setStatus("Шукаю по ключових словах…");
+        setStatus("Пишу відповідь…");
         sendBtn.disabled = true;
 
         addMsg(text, "user");
         promptEl.value = "";
         autoResize();
 
-        const contexts = ragEnabled ? RAG.retrieve(text, 8) : [];
-        const answer = answerFromKB(text, contexts);
+        // ✅ шукаємо, потім ФІЛЬТРУЄМО ТІЛЬКИ biology_basics.txt
+        let contexts = ragEnabled ? RAG.retrieveTopK(text, 10) : [];
+        contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
 
+        const answer = answerFromKB(text, contexts);
         addMsg(answer, "bot");
+
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -1048,6 +1080,9 @@
       }
     }
 
+    /***********************
+     * Seed KB from repo (GitHub Pages safe)
+     ***********************/
     function detectBasePath(){
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
@@ -1089,17 +1124,18 @@
       }
     }
 
+    /***********************
+     * Init
+     ***********************/
     async function init(){
       attachSendHandlersOnce();
 
       renderKB();
+      RAG.rebuildIndexFromKB();
       autoResize();
       setStatus("Готово");
 
       await seedKBFromRepoAlways();
-
-      // на всякий випадок
-      RAG.rebuildIndexFromKB();
 
       if (KB.getAll().length === 0) {
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
@@ -1109,3 +1145,4 @@
   </script>
 </body>
 </html>
+
