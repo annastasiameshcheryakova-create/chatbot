@@ -404,7 +404,7 @@
       <header class="topbar">
         <div class="pill" style="cursor:default">🧬 BioConsult</div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🧠 Пошук: увімкнено</button>
+          <button class="pill" id="ragToggleBtn" aria-pressed="true" style="cursor:pointer">🔎 Пошук: увімкнено</button>
           <div class="avatar" title="Профіль"></div>
         </div>
       </header>
@@ -419,7 +419,7 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Відповідаю тільки з конспекта <b>biology_basics.txt</b>. Для короткого запиту (1–2 слова) повертаю <b>одне речення</b>.
+            Відповідаю <b>тільки</b> фрагментами з <b>biology_basics.txt</b> за ключовими словами.
             Підтримую **жирний** через зірочки: <b>**так**</b>.
           </div>
         </div>
@@ -474,10 +474,11 @@
             </div>
 
             <div class="chips" id="chips">
-              <div class="chip">🌿 Поясни фотосинтез</div>
-              <div class="chip">🧬 Що таке реплікація ДНК?</div>
+              <div class="chip">🌿 Що таке фотосинтез?</div>
+              <div class="chip">🧬 Що таке ДНК?</div>
               <div class="chip">🦠 Різниця вірус/бактерія</div>
               <div class="chip">🧠 Мітоз vs мейоз</div>
+              <div class="chip">⚡ Що таке АТФ?</div>
             </div>
 
             <div class="hint">
@@ -575,7 +576,7 @@
       closeMenu();
       if (!confirm("Очистити базу знань (локально)?")) return;
       KB.clear();
-      RAG.rebuildIndexFromKB();
+      KBIndex.rebuildFromKB();
       renderKB();
       addMsg("Базу знань очищено ✅", "bot");
       setStatus("Готово");
@@ -583,7 +584,7 @@
 
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
-      ragToggleBtn.textContent = ragEnabled ? "🧠 Пошук: увімкнено" : "🧠 Пошук: вимкнено";
+      ragToggleBtn.textContent = ragEnabled ? "🔎 Пошук: увімкнено" : "🔎 Пошук: вимкнено";
       ragToggleBtn.setAttribute("aria-pressed", String(ragEnabled));
       setStatus("Готово");
     });
@@ -594,7 +595,7 @@
       const text = await file.text();
 
       KB.addDoc({ title: file.name, text });
-      RAG.rebuildIndexFromKB();
+      KBIndex.rebuildFromKB();
       renderKB();
 
       addMsg(`✅ Додано/оновлено матеріал у базі: ${file.name}`, "bot");
@@ -620,6 +621,9 @@
       closeMenu();
     });
 
+    // -------------------------
+    // KB storage
+    // -------------------------
     const KB = {
       key: "bioconsult_kb_docs",
 
@@ -702,7 +706,7 @@
         row.addEventListener("click", () => {
           if(!confirm(`Видалити "${d.title}" з бази?`)) return;
           KB.remove(d.id);
-          RAG.rebuildIndexFromKB();
+          KBIndex.rebuildFromKB();
           renderKB();
           addMsg(`✅ Видалено з бази: ${d.title}`, "bot");
         });
@@ -711,192 +715,205 @@
       });
     }
 
-    const RAG = (() => {
-      let chunks = [];
-      let stats = null;
+    // -------------------------
+    // SMART ANSWER INDEX (groups)
+    // expects file formatted like:
+    // GРУПА ЗАПИТУ: ...
+    // Ключові слова: ...
+    // Відповідь:
+    // ...
+    // -------------------------
+    const UA_STOP = new Set([
+      "що","це","та","і","й","або","але","в","у","на","до","від","для","про","як",
+      "які","яка","яке","якій","якого","якою","яким","якими","чи","не","так","є",
+      "з","із","за","над","під","при","між","о","об","по","коли","де","хто","ти","ви",
+      "мені","тобі","йому","їй","їм","нас","вам","їх","тут","там","цей","ця","це","ці"
+    ]);
 
-      const STOP = new Set([
-        "що","таке","це","як","і","й","або","чи","у","в","на","до","з","із","про","для",
-        "який","яка","яке","які","мені","тобі","вам","ми","ви","вони","вона","він",
-        "де","коли","скільки","чому","поясни","поясніть","будь","ласка","будь-ласка",
-        "розкажи","розкажіть","будьщо","будь-що"
-      ]);
-
-      function tokenize(text) {
-        return (text || "")
-          .toLowerCase()
-          .replace(/[^\p{L}\p{N}\s]+/gu, " ")
-          .split(/\s+/)
-          .filter(Boolean);
-      }
-
-      function chunkText(text, chunkSize = 900, overlap = 120) {
-        const clean = (text || "").replace(/\s+/g, " ").trim();
-        if (!clean) return [];
-        const out = [];
-        let i = 0;
-        while (i < clean.length) {
-          const end = Math.min(clean.length, i + chunkSize);
-          out.push(clean.slice(i, end));
-          i = end - overlap;
-          if (i < 0) i = 0;
-          if (end === clean.length) break;
-        }
-        return out;
-      }
-
-      function buildVocabStats(chunks) {
-        const df = Object.create(null);
-        for (const ch of chunks) {
-          const seen = new Set(tokenize(ch.text));
-          for (const t of seen) df[t] = (df[t] || 0) + 1;
-        }
-        return { df, N: chunks.length };
-      }
-
-      function embed(text, stats) {
-        const toks = tokenize(text);
-        const tf = Object.create(null);
-        for (const t of toks) tf[t] = (tf[t] || 0) + 1;
-
-        const vec = Object.create(null);
-        const { df, N } = stats || { df:{}, N:1 };
-        for (const [t, f] of Object.entries(tf)) {
-          const d = df[t] || 0;
-          const idf = Math.log((N + 1) / (d + 1)) + 1;
-          vec[t] = f * idf;
-        }
-        return vec;
-      }
-
-      function cosine(a, b) {
-        let dot = 0, na = 0, nb = 0;
-        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-        for (const k of keys) {
-          const x = a[k] || 0;
-          const y = b[k] || 0;
-          dot += x * y;
-          na += x * x;
-          nb += y * y;
-        }
-        if (!na || !nb) return 0;
-        return dot / (Math.sqrt(na) * Math.sqrt(nb));
-      }
-
-      function rebuildIndexFromKB(){
-        const docs = KB.getAll();
-        chunks = [];
-        for (const d of docs) {
-          const parts = chunkText(d.text);
-          parts.forEach((p, idx) => {
-            chunks.push({ title: d.title, text: p, id: `${d.title}#${idx}` });
-          });
-        }
-        stats = buildVocabStats(chunks);
-        chunks.forEach(ch => ch.vec = embed(ch.text, stats));
-      }
-
-      function retrieveTopK(question, k=8){
-        if(!stats || !chunks.length) return [];
-        const qvec = embed(question, stats);
-        const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
-        scored.sort((a,b)=>b.score-a.score);
-
-        return scored
-          .slice(0, k)
-          .filter(x => x.score > 0.07)
-          .map(x => x.ch);
-      }
-
-      function extractKeywordsHuman(q){
-        const toks = tokenize(q)
-          .map(t => t.trim())
-          .filter(t => t.length >= 3)
-          .filter(t => !STOP.has(t));
-
-        const out = [];
-        const seen = new Set();
-        for (const t of toks){
-          if (seen.has(t)) continue;
-          seen.add(t);
-          out.push(t);
-        }
-        return out.slice(0, 10);
-      }
-
-      return { rebuildIndexFromKB, retrieveTopK, extractKeywordsHuman };
-    })();
-
-    function normalizeSimple(s){
+    function normalize(s){
       return String(s || "")
         .toLowerCase()
+        .replace(/[’'`]/g, "'")
         .replace(/[^\p{L}\p{N}\s]+/gu, " ")
         .replace(/\s+/g, " ")
         .trim();
     }
 
-    function keywordHits(line, keywords){
-      const t = normalizeSimple(line);
-      let hits = 0;
-      for (const k of keywords){
-        if (t.includes(k)) hits++;
+    function tokensOf(s){
+      const t = normalize(s);
+      if(!t) return [];
+      return t.split(" ")
+        .map(w => w.trim())
+        .filter(w => w.length >= 3 && !UA_STOP.has(w));
+    }
+
+    function parseGroupsFromText(txt){
+      const lines = String(txt || "").split(/\r?\n/);
+      const groups = [];
+      let cur = null;
+      let mode = "none"; // none | keys | ans
+      for (const raw of lines){
+        const line = raw.trimEnd();
+
+        const mG = line.match(/^ГРУПА ЗАПИТУ:\s*(.+)\s*$/i);
+        if (mG){
+          if (cur) groups.push(cur);
+          cur = { title: mG[1].trim(), keysLine: "", keys: [], answer: "" };
+          mode = "none";
+          continue;
+        }
+        if (!cur) continue;
+
+        const mK = line.match(/^Ключові слова:\s*(.+)\s*$/i);
+        if (mK){
+          cur.keysLine = mK[1].trim();
+          // split by comma, also keep phrases
+          cur.keys = cur.keysLine.split(",")
+            .map(x => normalize(x))
+            .map(x => x.trim())
+            .filter(Boolean);
+          mode = "keys";
+          continue;
+        }
+        const mA = line.match(/^Відповідь:\s*$/i);
+        if (mA){
+          mode = "ans";
+          continue;
+        }
+
+        if (mode === "ans"){
+          cur.answer += (cur.answer ? "\n" : "") + raw; // keep original formatting
+        }
       }
-      return hits;
+      if (cur) groups.push(cur);
+
+      // Cleanup: trim answers, keep length (don’t re-write)
+      for (const g of groups){
+        g.answer = String(g.answer || "").replace(/\s+$/g, "");
+        g.titleNorm = normalize(g.title);
+        g.keysNorm = g.keys.map(k => normalize(k));
+        g.answerNorm = normalize(g.answer);
+        // token set for scoring
+        g.keyTokenSet = new Set();
+        for (const k of g.keysNorm){
+          for (const tok of tokensOf(k)) g.keyTokenSet.add(tok);
+        }
+      }
+      return groups;
     }
 
-    function isBadLine(s){
-      const t = String(s || "").trim();
-      if (!t) return true;
-      if (/^ключові\s+поняття\s*:/i.test(t)) return true;
-      if (/={3,}|-{3,}|_{3,}/.test(t)) return true;
-      if (t.length < 25) return true;
-      return false;
-    }
-
-    function findBestSingleSentence(question, contexts){
-      const q = String(question || "").trim();
-      const keywords = RAG.extractKeywordsHuman(q);
-
-      // якщо запит короткий — робимо супер-строго: 1 найкраще речення
-      const strictShort = keywords.length <= 2;
+    function pickBestGroup(question, groups){
+      const qNorm = normalize(question);
+      const qToks = tokensOf(question);
+      if (!qToks.length) return null;
 
       let best = null;
 
-      for (const ctx of (contexts || []).slice(0, 6)){
-        const sentences = String(ctx.text || "")
-          .replace(/\r/g,"")
-          .split(/(?<=[.!?…])\s+/)
-          .map(s => s.trim());
+      for (const g of groups){
+        // 1) Phrase hits (full keyword phrases)
+        let phraseHits = 0;
+        for (const phrase of g.keysNorm){
+          if (!phrase) continue;
+          if (phrase.length < 3) continue;
+          if (qNorm.includes(phrase)) phraseHits += 3;
+        }
 
-        for (const s of sentences){
-          if (isBadLine(s)) continue;
+        // 2) Token overlap
+        let tokHits = 0;
+        for (const t of qToks){
+          if (g.keyTokenSet.has(t)) tokHits += 1;
+        }
 
-          const hits = keywordHits(s, keywords);
-          if (strictShort) {
-            if (hits < 1) continue; // треба попасти по ключовому слову
-          } else {
-            if (hits < 2) continue;
-          }
+        // 3) Small bonus if title overlaps (often strong)
+        let titleBonus = 0;
+        for (const t of qToks){
+          if (g.titleNorm.includes(t)) titleBonus += 0.5;
+        }
 
-          // бонус якщо “— це” (визначення)
-          const defBoost = /—\s*це\b/i.test(s) ? 3 : 0;
+        const score = phraseHits + tokHits + titleBonus;
 
-          // штраф якщо речення “списком”
-          const listPenalty = /^(\*|•|-|\d+[\).])\s+/.test(s) ? 2 : 0;
+        // require some relevance (avoid random)
+        if (score < 2) continue;
 
-          const score = hits * 3 + defBoost - listPenalty;
-
-          if (!best || score > best.score){
-            best = { score, text: s };
-          }
+        if (!best || score > best.score){
+          best = { group: g, score };
         }
       }
 
-      if (best) return `“${best.text}”`;
-
-      return "У **biology_basics.txt** не знайшов точне **одне** речення під цей запит. Спробуй додати ще 1–2 слова (наприклад: *«рибосоми функція»*).";
+      return best?.group || null;
     }
 
+    // If group answer is long, we still return ONLY that group (as you asked),
+    // but we can optionally shorten to 1-3 sentences for tiny queries (e.g. "рибосоми").
+    // Rule: if query looks like "one term", return first 1–2 sentences/lines.
+    function smartTrimAnswerForShortQuery(question, answer){
+      const qToks = tokensOf(question);
+      const q = normalize(question);
+
+      const looksLikeSingleTerm =
+        qToks.length <= 2 &&
+        q.length <= 22 &&
+        !q.includes("?");
+
+      if (!looksLikeSingleTerm) return answer;
+
+      // Take first 1–2 sentences OR first 2 non-empty lines
+      const lines = String(answer || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      if (!lines.length) return answer;
+
+      const joined = lines.join(" ");
+      const sentences = joined.split(/(?<=[.!?…])\s+/).filter(Boolean);
+
+      if (sentences.length >= 2) return sentences.slice(0, 2).join(" ");
+      if (sentences.length === 1) return sentences[0];
+
+      // fallback: 2 lines
+      return lines.slice(0, 2).join("\n");
+    }
+
+    // -------------------------
+    // KBIndex: builds group index from biology_basics.txt
+    // -------------------------
+    const KBIndex = (() => {
+      let groups = [];
+      let ready = false;
+      let lastSourceTitle = null;
+
+      function rebuildFromKB(){
+        const docs = KB.getAll();
+        const bio = docs.find(d => d.title === "biology_basics.txt");
+        if (!bio){
+          groups = [];
+          ready = false;
+          lastSourceTitle = null;
+          return;
+        }
+        groups = parseGroupsFromText(bio.text);
+        ready = groups.length > 0;
+        lastSourceTitle = bio.title;
+      }
+
+      function answer(question){
+        if (!ready || !groups.length){
+          return "⚠️ У базі немає структурованих блоків. Переконайся, що у **biology_basics.txt** є формат:\nГРУПА ЗАПИТУ / Ключові слова / Відповідь.";
+        }
+
+        const g = pickBestGroup(question, groups);
+        if (!g){
+          return "У **biology_basics.txt** не знайшов релевантної **групи запиту**. Спробуй інші ключові слова (наприклад: «що таке …», «визначення …», «етапи …»).";
+        }
+
+        const raw = String(g.answer || "").trim();
+        const trimmed = smartTrimAnswerForShortQuery(question, raw);
+        return trimmed || "⚠️ Знайшов групу, але відповідь порожня.";
+      }
+
+      return { rebuildFromKB, answer };
+    })();
+
+    // -------------------------
+    // UI send
+    // -------------------------
     // FIX double answer
     let sendingLock = false;
 
@@ -923,25 +940,24 @@
       sendingLock = true;
 
       try{
-        setStatus("Пишу відповідь…");
+        setStatus("Шукаю в базі…");
         sendBtn.disabled = true;
 
         addMsg(text, "user");
         promptEl.value = "";
         autoResize();
 
-        let contexts = ragEnabled ? RAG.retrieveTopK(text, 8) : [];
-        contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
+        // If search off => refuse (you can change behavior)
+        if (!ragEnabled){
+          addMsg("🔎 Пошук вимкнено. Увімкни його, щоб відповідати з бази.", "bot");
+          setStatus("Готово");
+          return;
+        }
 
-        // ✅ якщо запит короткий (1–2 слова) — тільки ОДНЕ речення
-        const keywords = RAG.extractKeywordsHuman(text);
-        const isShortQuery = keywords.length <= 2;
-
-        const answer = isShortQuery
-          ? findBestSingleSentence(text, contexts)
-          : findBestSingleSentence(text, contexts); // можеш замінити на “визначення+схема” для довгих, якщо захочеш
-
+        // ONLY answer from biology_basics.txt groups
+        const answer = KBIndex.answer(text);
         addMsg(answer, "bot");
+
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -952,6 +968,9 @@
       }
     }
 
+    // -------------------------
+    // Seed KB (GitHub Pages safe)
+    // -------------------------
     function detectBasePath(){
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
@@ -977,7 +996,7 @@
 
         KB.upsertByTitle("biology_basics.txt", text);
 
-        RAG.rebuildIndexFromKB();
+        KBIndex.rebuildFromKB();
         renderKB();
 
         setStatus("Готово");
@@ -997,7 +1016,7 @@
       attachSendHandlersOnce();
 
       renderKB();
-      RAG.rebuildIndexFromKB();
+      KBIndex.rebuildFromKB();
       autoResize();
       setStatus("Готово");
 
@@ -1005,6 +1024,21 @@
 
       if (KB.getAll().length === 0) {
         addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
+        return;
+      }
+
+      // Friendly warning if file exists but not structured
+      const docs = KB.getAll();
+      const bio = docs.find(d => d.title === "biology_basics.txt");
+      if (bio){
+        const hasGroups = /ГРУПА ЗАПИТУ:/i.test(bio.text) && /Ключові слова:/i.test(bio.text) && /Відповідь:/i.test(bio.text);
+        if (!hasGroups){
+          addMsg(
+            "⚠️ У **biology_basics.txt** не бачу структури для пошуку.\n" +
+            "Файл має містити блоки: **ГРУПА ЗАПИТУ / Ключові слова / Відповідь**.",
+            "bot"
+          );
+        }
       }
     }
     init();
