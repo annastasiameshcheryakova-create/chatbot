@@ -419,7 +419,7 @@
           <h1 class="title">Твій чат-бот з біології</h1>
 
           <div class="subtitle">
-            Відповідаю тільки з конспекта <b>biology_basics.txt</b>: даю <b>визначення</b> + <b>схему (етапи/кроки)</b> за ключовими словами.
+            Відповідаю тільки з конспекта <b>biology_basics.txt</b>. Для короткого запиту (1–2 слова) повертаю <b>одне речення</b>.
             Підтримую **жирний** через зірочки: <b>**так**</b>.
           </div>
         </div>
@@ -493,9 +493,6 @@
   </div>
 
   <script>
-    /***********************
-     * UI refs
-     ***********************/
     const promptEl = document.getElementById('prompt');
     const chatLog  = document.getElementById('chatLog');
     const chips    = document.getElementById('chips');
@@ -528,9 +525,6 @@
     }
     promptEl.addEventListener('input', autoResize);
 
-    /***********************
-     * Minimal markdown (**bold**)
-     ***********************/
     function escapeHTML(s){
       return String(s || "")
         .replaceAll("&", "&amp;")
@@ -555,9 +549,6 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    /***********************
-     * Plus menu
-     ***********************/
     function openMenu(){ plusMenu.classList.add("open"); }
     function closeMenu(){ plusMenu.classList.remove("open"); }
 
@@ -590,9 +581,6 @@
       setStatus("Готово");
     });
 
-    /***********************
-     * Toggle search
-     ***********************/
     ragToggleBtn.addEventListener('click', () => {
       ragEnabled = !ragEnabled;
       ragToggleBtn.textContent = ragEnabled ? "🧠 Пошук: увімкнено" : "🧠 Пошук: вимкнено";
@@ -600,9 +588,6 @@
       setStatus("Готово");
     });
 
-    /***********************
-     * Upload text
-     ***********************/
     textInput.addEventListener('change', async () => {
       const file = textInput.files?.[0];
       if(!file) return;
@@ -618,9 +603,6 @@
       textInput.value = "";
     });
 
-    /***********************
-     * Chips & new chat
-     ***********************/
     chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if(!chip) return;
@@ -638,9 +620,6 @@
       closeMenu();
     });
 
-    /***********************
-     * KB storage
-     ***********************/
     const KB = {
       key: "bioconsult_kb_docs",
 
@@ -732,14 +711,10 @@
       });
     }
 
-    /***********************
-     * RAG (TF-IDF-ish) + keywords
-     ***********************/
     const RAG = (() => {
       let chunks = [];
       let stats = null;
 
-      // українські стоп-слова (мінімальний набір)
       const STOP = new Set([
         "що","таке","це","як","і","й","або","чи","у","в","на","до","з","із","про","для",
         "який","яка","яке","які","мені","тобі","вам","ми","ви","вони","вона","він",
@@ -821,7 +796,7 @@
         chunks.forEach(ch => ch.vec = embed(ch.text, stats));
       }
 
-      function retrieveTopK(question, k=10){
+      function retrieveTopK(question, k=8){
         if(!stats || !chunks.length) return [];
         const qvec = embed(question, stats);
         const scored = chunks.map(ch => ({ ch, score: cosine(qvec, ch.vec) }));
@@ -829,7 +804,7 @@
 
         return scored
           .slice(0, k)
-          .filter(x => x.score > 0.06)   // трошки жорсткіше, щоб “по ділу”
+          .filter(x => x.score > 0.07)
           .map(x => x.ch);
       }
 
@@ -839,7 +814,6 @@
           .filter(t => t.length >= 3)
           .filter(t => !STOP.has(t));
 
-        // унікальні, збережемо порядок
         const out = [];
         const seen = new Set();
         for (const t of toks){
@@ -847,62 +821,11 @@
           seen.add(t);
           out.push(t);
         }
-
-        // якщо користувач написав дуже мало — лишаємо хоч щось
         return out.slice(0, 10);
       }
 
       return { rebuildIndexFromKB, retrieveTopK, extractKeywordsHuman };
     })();
-
-    /***********************
-     * Answer: definition + scheme (ONLY biology_basics.txt)
-     ***********************/
-    function splitSentencesSmart(text){
-      const t = String(text || "")
-        .replace(/\r/g, "")
-        .trim();
-      if (!t) return [];
-      return t
-        .replace(/\n{3,}/g, "\n\n")
-        .split(/(?<=[.!?…])\s+(?=[A-ZА-ЯІЇЄҐ"“])/u);
-    }
-
-    function looksLikeNoise(s){
-      const t = String(s || "").trim();
-      if (!t) return true;
-      if (/^ключові\s+поняття\s*:/i.test(t)) return true;   // важливо
-      if (/={3,}|-{3,}|_{3,}/.test(t)) return true;
-      if (t.length < 20) return true;
-      return false;
-    }
-
-    function isDefinitionLine(line){
-      const t = String(line || "").trim();
-      return (
-        /—\s*це\b/i.test(t) ||
-        /\bце\s+процес\b/i.test(t) ||
-        /\bце\s+анаболічний\b/i.test(t) ||
-        /\bозначає\b/i.test(t) ||
-        /\bназивають\b/i.test(t)
-      );
-    }
-
-    function isSchemeLine(line){
-      const t = String(line || "").trim();
-      if (!t) return false;
-      if (/^ключові\s+поняття\s*:/i.test(t)) return false;
-      return (
-        /^(\*|•|-)\s+/.test(t) ||
-        /^\d+[\).]\s+/.test(t) ||
-        /^етап\s+\d+/i.test(t) ||
-        /^фаза\s+/i.test(t) ||
-        /\bключові\s+процеси\b/i.test(t) ||
-        /\bфази\b/i.test(t) ||
-        /\bрезультат\b/i.test(t) ||
-        /\bвідбувається\b/i.test(t)
-      );
-    }
 
     function normalizeSimple(s){
       return String(s || "")
@@ -921,116 +844,60 @@
       return hits;
     }
 
-    function answerFromKB(question, contexts){
-      const q = String(question || "").trim();
-      if (!q) return "Напиши запитання 🙂";
-
-      if (!contexts || contexts.length === 0){
-        return "У **biology_basics.txt** не знайшов релевантного фрагмента. Спробуй інші ключові слова.";
-      }
-
-      const keywords = RAG.extractKeywordsHuman(q);
-      const shortQuery = keywords.length <= 2;
-
-      let best = null;
-      const pool = contexts.slice(0, 5);
-
-      for (const ctx of pool){
-        const lines = String(ctx.text || "").split("\n").map(x => x.trim()).filter(Boolean);
-
-        for (let i = 0; i < lines.length; i++){
-          const line = lines[i];
-          if (looksLikeNoise(line)) continue;
-
-          const hits = keywordHits(line, keywords);
-          const defBoost = isDefinitionLine(line) ? 3 : 0;
-
-          const pass = shortQuery ? (hits >= 1 || defBoost) : (hits >= 2 || defBoost);
-          if (!pass) continue;
-
-          const score = hits * 2 + defBoost;
-          if (!best || score > best.score){
-            best = { score, line, ctx, lineIndex: i, lines };
-          }
-        }
-      }
-
-      if (!best){
-        const ctx = contexts[0];
-        const sentences = splitSentencesSmart(ctx.text).map(s => s.trim()).filter(s => !looksLikeNoise(s));
-        let topS = null;
-        for (const s of sentences){
-          const hits = keywordHits(s, keywords);
-          if ((shortQuery && hits < 1) || (!shortQuery && hits < 2)) continue;
-          const defBoost = isDefinitionLine(s) ? 2 : 0;
-          const score = hits * 2 + defBoost;
-          if (!topS || score > topS.score) topS = { s, score };
-        }
-        if (!topS){
-          return "У **biology_basics.txt** є матеріал, але не знайшов коротке визначення під цей запит. Спробуй уточнити ключові слова.";
-        }
-        return `**Визначення:**\n“${topS.s}”`;
-      }
-
-      // збираємо “схему” після визначення
-      const scheme = [];
-      const MAX_SCHEME_LINES = 8;
-
-      for (let j = best.lineIndex + 1; j < best.lines.length && scheme.length < MAX_SCHEME_LINES; j++){
-        const ln = best.lines[j].trim();
-        if (!ln) break;
-        if (/^={3,}/.test(ln)) break;
-        if (looksLikeNoise(ln)) continue;
-
-        const hits = keywordHits(ln, keywords);
-        if (isSchemeLine(ln) || hits > 0){
-          if (/^ключові\s+поняття\s*:/i.test(ln)) continue;
-          scheme.push(ln);
-        }
-      }
-
-      // якщо мало — добираємо у вікні поруч
-      if (scheme.length < 3){
-        const start = Math.max(0, best.lineIndex - 6);
-        const end = Math.min(best.lines.length, best.lineIndex + 16);
-        for (let j = start; j < end && scheme.length < MAX_SCHEME_LINES; j++){
-          if (j === best.lineIndex) continue;
-          const ln = best.lines[j].trim();
-          if (!ln || looksLikeNoise(ln)) continue;
-          if (/^ключові\s+поняття\s*:/i.test(ln)) continue;
-
-          const hits = keywordHits(ln, keywords);
-          if (isSchemeLine(ln) && (shortQuery ? true : hits >= 1)){
-            scheme.push(ln);
-          }
-        }
-      }
-
-      let out = `**Визначення:**\n“${best.line}”`;
-
-      if (scheme.length){
-        const bullets = scheme
-          .slice(0, 6)
-          .map(x => {
-            if (/^(\*|•|-)\s+/.test(x)) return `- ${x.replace(/^(\*|•|-)\s+/, "")}`;
-            if (/^\d+[\).]\s+/.test(x)) return `- ${x.replace(/^\d+[\).]\s+/, "")}`;
-            return `- ${x}`;
-          })
-          .join("\n");
-
-        out += `\n\n**Схема роботи (коротко):**\n${bullets}`;
-      } else {
-        const fallback = String(best.ctx.text || "").trim();
-        const clipped = fallback.length > 520 ? fallback.slice(0, 520).trim() + "…" : fallback;
-        out += `\n\n**Схема роботи:**\n“${clipped}”`;
-      }
-
-      return out;
+    function isBadLine(s){
+      const t = String(s || "").trim();
+      if (!t) return true;
+      if (/^ключові\s+поняття\s*:/i.test(t)) return true;
+      if (/={3,}|-{3,}|_{3,}/.test(t)) return true;
+      if (t.length < 25) return true;
+      return false;
     }
 
-    /***********************
-     * Send (fix double answer)
-     ***********************/
+    function findBestSingleSentence(question, contexts){
+      const q = String(question || "").trim();
+      const keywords = RAG.extractKeywordsHuman(q);
+
+      // якщо запит короткий — робимо супер-строго: 1 найкраще речення
+      const strictShort = keywords.length <= 2;
+
+      let best = null;
+
+      for (const ctx of (contexts || []).slice(0, 6)){
+        const sentences = String(ctx.text || "")
+          .replace(/\r/g,"")
+          .split(/(?<=[.!?…])\s+/)
+          .map(s => s.trim());
+
+        for (const s of sentences){
+          if (isBadLine(s)) continue;
+
+          const hits = keywordHits(s, keywords);
+          if (strictShort) {
+            if (hits < 1) continue; // треба попасти по ключовому слову
+          } else {
+            if (hits < 2) continue;
+          }
+
+          // бонус якщо “— це” (визначення)
+          const defBoost = /—\s*це\b/i.test(s) ? 3 : 0;
+
+          // штраф якщо речення “списком”
+          const listPenalty = /^(\*|•|-|\d+[\).])\s+/.test(s) ? 2 : 0;
+
+          const score = hits * 3 + defBoost - listPenalty;
+
+          if (!best || score > best.score){
+            best = { score, text: s };
+          }
+        }
+      }
+
+      if (best) return `“${best.text}”`;
+
+      return "У **biology_basics.txt** не знайшов точне **одне** речення під цей запит. Спробуй додати ще 1–2 слова (наприклад: *«рибосоми функція»*).";
+    }
+
+    // FIX double answer
     let sendingLock = false;
 
     function attachSendHandlersOnce(){
@@ -1063,13 +930,18 @@
         promptEl.value = "";
         autoResize();
 
-        // ✅ шукаємо, потім ФІЛЬТРУЄМО ТІЛЬКИ biology_basics.txt
-        let contexts = ragEnabled ? RAG.retrieveTopK(text, 10) : [];
+        let contexts = ragEnabled ? RAG.retrieveTopK(text, 8) : [];
         contexts = contexts.filter(c => (c.title || "") === "biology_basics.txt");
 
-        const answer = answerFromKB(text, contexts);
-        addMsg(answer, "bot");
+        // ✅ якщо запит короткий (1–2 слова) — тільки ОДНЕ речення
+        const keywords = RAG.extractKeywordsHuman(text);
+        const isShortQuery = keywords.length <= 2;
 
+        const answer = isShortQuery
+          ? findBestSingleSentence(text, contexts)
+          : findBestSingleSentence(text, contexts); // можеш замінити на “визначення+схема” для довгих, якщо захочеш
+
+        addMsg(answer, "bot");
         setStatus("Готово");
       }catch(err){
         addMsg("❌ Помилка: " + (err?.message || String(err)), "bot");
@@ -1080,9 +952,6 @@
       }
     }
 
-    /***********************
-     * Seed KB from repo (GitHub Pages safe)
-     ***********************/
     function detectBasePath(){
       const parts = (window.location.pathname || "/").split("/").filter(Boolean);
       if (window.location.hostname.endsWith("github.io") && parts.length >= 1){
@@ -1124,9 +993,6 @@
       }
     }
 
-    /***********************
-     * Init
-     ***********************/
     async function init(){
       attachSendHandlersOnce();
 
@@ -1145,4 +1011,3 @@
   </script>
 </body>
 </html>
-
