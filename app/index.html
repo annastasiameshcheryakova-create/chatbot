@@ -473,6 +473,7 @@
               </div>
             </div>
 
+            <!-- CHIPS: прибрано 2 старі та додано 2 нові -->
             <div class="chips" id="chips">
               <div class="chip">🌿 Що таке фотосинтез?</div>
               <div class="chip">🧬 Що таке ДНК?</div>
@@ -724,7 +725,6 @@
       "мені","тобі","йому","їй","їм","нас","вам","їх","тут","там","цей","ця","це","ці"
     ]);
 
-    // ====== ORIGINAL normalize / tokensOf BELOW (НЕ УДАЛЯЕМ), но добавим "stem" и "smart tokens" ======
     function normalize(s){
       return String(s || "")
         .toLowerCase()
@@ -742,45 +742,11 @@
         .filter(w => w.length >= 3 && !UA_STOP.has(w));
     }
 
-    // =========================
-    // ✅ ADDED (НЕ ЛОМАЯ СТАРОЕ): стемминг + "умные" токены, но старые функции остаются
-    // =========================
-    function stemWord(w){
-      let t = normalize(w);
-      if (!t) return "";
-      if (t.length <= 4) return t;
-
-      const suffixes = [
-        "ами","ями","ові","еві","ому","ему","ими","ого","ему",
-        "а","я","у","ю","і","ї","е","є","ом","ем","ою","ею",
-        "ий","ій","ої","ів","їв","ам","ям","ах","ях","ми","ти","ть","ся","ться"
-      ];
-
-      for (const suf of suffixes){
-        if (t.endsWith(suf) && t.length - suf.length >= 4){
-          return t.slice(0, -suf.length);
-        }
-      }
-      return t;
-    }
-
-    function tokensOfSmart(s){
-      return tokensOf(s).map(stemWord).filter(Boolean);
-    }
-
-    function unique(arr){
-      return Array.from(new Set(arr));
-    }
-
-    // -------------------------
-    // Parse file groups
-    // -------------------------
     function parseGroupsFromText(txt){
       const lines = String(txt || "").split(/\r?\n/);
       const groups = [];
       let cur = null;
       let mode = "none"; // none | keys | ans
-
       for (const raw of lines){
         const line = raw.trimEnd();
 
@@ -820,25 +786,14 @@
         g.titleNorm = normalize(g.title);
         g.keysNorm = g.keys.map(k => normalize(k));
         g.answerNorm = normalize(g.answer);
-
-        // старый набор токенов (оставляем)
         g.keyTokenSet = new Set();
         for (const k of g.keysNorm){
           for (const tok of tokensOf(k)) g.keyTokenSet.add(tok);
-        }
-
-        // ✅ новый "умный" набор токенов (добавили, не убирая старое)
-        g.keyTokenSmartSet = new Set();
-        for (const k of g.keysNorm){
-          for (const tok of tokensOfSmart(k)) g.keyTokenSmartSet.add(tok);
         }
       }
       return groups;
     }
 
-    // -------------------------
-    // ORIGINAL pickBestGroup (НЕ УДАЛЯЕМ) — пусть остаётся
-    // -------------------------
     function pickBestGroup(question, groups){
       const qNorm = normalize(question);
       const qToks = tokensOf(question);
@@ -869,94 +824,6 @@
 
         if (!best || score > best.score){
           best = { group: g, score };
-        }
-      }
-
-      return best?.group || null;
-    }
-
-    // =========================
-    // ✅ ADDED: улучшенный выбор группы (используется ВМЕСТО старого),
-    // но старый pickBestGroup остаётся в коде как ты просил.
-    // =========================
-    function pickBestGroupSmart(question, groups){
-      const qNorm = normalize(question);
-      const qToks = tokensOfSmart(question);
-      if (!qToks.length) return null;
-
-      const shortQuery = (qToks.length <= 2 && qNorm.length <= 26 && !qNorm.includes("?"));
-      const qKeyToks = qToks.filter(t => t.length >= 4);
-
-      let best = null;
-
-      for (const g of groups){
-        let phraseHits = 0;
-        let exactPhraseHit = false;
-
-        // фразы из ключевых слов
-        for (const phrase of g.keysNorm){
-          if (!phrase) continue;
-          if (phrase.length < 4) continue;
-
-          if (qNorm.includes(phrase)){
-            phraseHits += 10;
-            exactPhraseHit = true;
-          } else {
-            const pToks = tokensOfSmart(phrase);
-            let pCover = 0;
-            for (const pt of pToks){
-              if (qToks.includes(pt)) pCover++;
-            }
-            if (pToks.length && pCover >= Math.max(1, Math.ceil(pToks.length * 0.6))){
-              phraseHits += 4;
-            }
-          }
-        }
-
-        // токены
-        let tokHits = 0;
-        let keyTokHits = 0;
-
-        for (const t of qToks){
-          if (g.keyTokenSmartSet?.has(t) || g.keyTokenSet?.has(t)) tokHits += 1;
-        }
-        for (const t of qKeyToks){
-          if (g.keyTokenSmartSet?.has(t) || g.keyTokenSet?.has(t)) keyTokHits += 1;
-        }
-
-        // бонус за совпадение в названии
-        let titleBonus = 0;
-        const titleToks = tokensOfSmart(g.titleNorm);
-        for (const t of qKeyToks){
-          if (titleToks.includes(t)) titleBonus += 2;
-        }
-
-        // coverage
-        const denom = Math.max(1, qKeyToks.length);
-        const coverage = keyTokHits / denom;
-
-        // penalty за "слишком широкие" ответы при коротком запросе
-        const answerLen = (g.answer || "").length;
-        const lengthPenalty = shortQuery ? Math.min(6, answerLen / 600) : Math.min(3, answerLen / 1200);
-
-        // пороги
-        if (shortQuery){
-          if (!exactPhraseHit && coverage < 0.5 && keyTokHits < 1) continue;
-        } else {
-          if (phraseHits + tokHits + titleBonus < 2) continue;
-        }
-
-        const score =
-          phraseHits +
-          tokHits +
-          titleBonus +
-          (coverage * 6) -
-          lengthPenalty;
-
-        if (!best || score > best.score + 0.01){
-          best = { group: g, score, answerLen };
-        } else if (best && Math.abs(score - best.score) <= 0.01){
-          if (answerLen < best.answerLen) best = { group: g, score, answerLen };
         }
       }
 
@@ -1013,9 +880,7 @@
           return "⚠️ У базі немає структурованих блоків. Переконайся, що у **biology_basics.txt** є формат:\nГРУПА ЗАПИТУ / Ключові слова / Відповідь.";
         }
 
-        // ✅ используем улучшенный выбор, но старый pickBestGroup НЕ удалён
-        const g = pickBestGroupSmart(question, groups) || pickBestGroup(question, groups);
-
+        const g = pickBestGroup(question, groups);
         if (!g){
           return "У **biology_basics.txt** не знайшов релевантної **групи запиту**. Спробуй інші ключові слова (наприклад: «що таке …», «визначення …», «етапи …»).";
         }
@@ -1090,8 +955,11 @@
       autoResize();
       setStatus("Готово");
 
+      // ❌ ВИДАЛЕНО авто-завантаження з репо:
+      // await seedKBFromRepoAlways();
+
       if (KB.getAll().length === 0) {
-        addMsg("Додай **biology_basics.txt** через “+”.", "bot");
+        addMsg("Додай **biology_basics.txt** через “+” або поклади файл у data/raw.", "bot");
         return;
       }
 
